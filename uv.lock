@@ -91,22 +91,13 @@ dependencies = [
     { name = "scylla-driver" },
 ]
 
-[package.optional-dependencies]
-test = [
-    { name = "pytest" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "pytest", marker = "extra == 'test'" },
-    { name = "scylla-driver" },
-]
-provides-extras = ["test"]
+requires-dist = [{ name = "scylla-driver" }]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.4.1" }]
