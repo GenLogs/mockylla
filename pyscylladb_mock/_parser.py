@@ -35,9 +35,15 @@ def handle_query(query, session, state):
         return __handle_insert_into(insert_match, session, state)
 
     select_match = re.match(
-        r"^\s*SELECT\s+(.*)\s+FROM\s+([\w\.]+)(?:\s+WHERE\s+(.*))?\s*;?\s*$",
+        (
+            r"^\s*SELECT\s+(.*?)\s+FROM\s+([\w\.]+)"
+            r"(?:\s+WHERE\s+(.*?))?"
+            r"(?:\s+ORDER BY\s+(.*?))?"
+            r"(?:\s+LIMIT\s+(\d+))?"
+            r"\s*;?\s*$"
+        ),
         query,
-        re.IGNORECASE,
+        re.IGNORECASE | re.DOTALL,
     )
     if select_match:
         return __handle_select_from(select_match, session, state)
@@ -163,7 +169,13 @@ def __handle_insert_into(insert_match, session, state):
 
 
 def __handle_select_from(select_match, session, state):
-    _, table_name_full, where_clause_str = select_match.groups()
+    (
+        columns_str,
+        table_name_full,
+        where_clause_str,
+        order_by_clause_str,
+        limit_str,
+    ) = select_match.groups()
 
     # Determine keyspace and table name
     if "." in table_name_full:
@@ -184,7 +196,6 @@ def __handle_select_from(select_match, session, state):
     schema = state.keyspaces[keyspace_name]["tables"][table_name]["schema"]
 
     # Filter data based on WHERE clause
-    filtered_data = table_data
     if where_clause_str:
         conditions = [
             cond.strip()
@@ -195,6 +206,23 @@ def __handle_select_from(select_match, session, state):
 
         parsed_conditions = []
         for cond in conditions:
+            # First, try to match an IN clause
+            in_match = re.match(
+                r"(\w+)\s+IN\s+\((.*)\)", cond.strip(), re.IGNORECASE
+            )
+            if in_match:
+                col, values_str = in_match.groups()
+                # Naive parser for a list of strings in quotes
+                values = [v.strip().strip("'\"") for v in values_str.split(",")]
+
+                # Cast values to the correct type based on schema
+                cql_type = schema.get(col)
+                if cql_type:
+                    values = [_cast_value(v, cql_type) for v in values]
+
+                parsed_conditions.append((col, "IN", values))
+                continue
+
             match = re.match(
                 r"(\w+)\s*([<>=]+)\s*(?:'([^']*)'|\"([^\"]*)\"|([\w\.-]+))",
                 cond.strip(),
@@ -230,25 +258,58 @@ def __handle_select_from(select_match, session, state):
                 elif op == "<=":
                     if not (row_val <= val):
                         return False
-                else:  # Unsupported operator
+                elif op == "IN":
+                    if row_val not in val:
+                        return False
+                else:  # Should not happen if regex is correct
                     return False
             return True
 
-        if parsed_conditions:
-            filtered_data = [row for row in table_data if check_row(row)]
+        filtered_data = [row for row in table_data if check_row(row)]
+    else:
+        filtered_data = list(table_data)
 
-    result_set = []
-    for row in filtered_data:
-        new_row = {}
-        for col_name, value in row.items():
-            col_type = schema.get(col_name)
-            # The data is already typed, so we can just use it.
-            # But the driver might expect specific types, so we keep casting for the output.
-            if col_type == "int":
-                new_row[col_name] = int(value)
-            else:
-                new_row[col_name] = value
-        result_set.append(new_row)
+    # Handle ORDER BY
+    if order_by_clause_str:
+        order_by_clause_str = order_by_clause_str.strip()
+        parts = order_by_clause_str.split()
+        order_col = parts[0]
+        order_dir = "ASC"
+        if len(parts) > 1:
+            order_dir = parts[1].upper()
+
+        if order_dir not in ["ASC", "DESC"]:
+            raise Exception(f"Invalid ORDER BY direction: {order_dir}")
+
+        reverse = order_dir == "DESC"
+
+        if filtered_data:
+            if order_col not in schema:
+                raise Exception(
+                    f"Column '{order_col}' in ORDER BY not found in table schema"
+                )
+
+            filtered_data = sorted(
+                filtered_data,
+                key=lambda row: row.get(order_col, None),
+                reverse=reverse,
+            )
+
+    # Handle LIMIT
+    if limit_str:
+        limit = int(limit_str)
+        filtered_data = filtered_data[:limit]
+
+    # Select columns
+    select_cols_str = columns_str.strip()
+    if select_cols_str == "*":
+        result_set = filtered_data
+    else:
+        select_cols = [c.strip() for c in select_cols_str.split(",")]
+        result_set = []
+        for row in filtered_data:
+            new_row = {col: row.get(col) for col in select_cols}
+            result_set.append(new_row)
 
     print(f"Selected {len(result_set)} rows from '{table_name}'")
     return result_set
