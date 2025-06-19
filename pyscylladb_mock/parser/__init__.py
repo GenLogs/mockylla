@@ -1,10 +1,12 @@
 import re
 
+from .alter import handle_alter_table
 from .create import handle_create_keyspace, handle_create_table
 from .delete import handle_delete_from
 from .drop import handle_drop_table
 from .insert import handle_insert_into
 from .select import handle_select_from
+from .truncate import handle_truncate_table
 from .update import handle_update
 
 
@@ -78,5 +80,21 @@ def handle_query(query, session, state):
     )
     if drop_table_match:
         return handle_drop_table(drop_table_match, session, state)
+
+    truncate_table_match = re.match(
+        r"^\s*TRUNCATE\s+(?:TABLE\s+)?([\w\.]+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if truncate_table_match:
+        return handle_truncate_table(truncate_table_match, session, state)
+
+    alter_table_match = re.match(
+        r"^\s*ALTER\s+TABLE\s+([\w\.]+)\s+ADD\s+([\w\s,]+)\s+([\w\s,]+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if alter_table_match:
+        return handle_alter_table(alter_table_match, session, state)
 
     return []

@@ -63,8 +63,8 @@ Our roadmap is focused on expanding the CQL support to cover the most common ope
 *   **Expanded Query Support**:
     *   [x] `IN` clauses in `SELECT` statements.
     *   [x] `ORDER BY` and `LIMIT` clauses.
-    *   [ ] `TRUNCATE TABLE` statements.
-    *   [ ] `ALTER TABLE` for schema modifications.
+    *   [x] `TRUNCATE TABLE` statements.
+    *   [x] `ALTER TABLE` for schema modifications.
 *   **Advanced Data Types**:
     *   [ ] Collection types: `list`, `set`, and `map`.
     *   [ ] User-Defined Types (UDTs).
