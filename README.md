@@ -60,11 +60,6 @@ This library is currently in the early stages of development. Here is a summary 
 
 Our roadmap is focused on expanding the CQL support to cover the most common operations developers use. Here are some of the features we're planning to add:
 
-*   **Expanded Query Support**:
-    *   [x] `IN` clauses in `SELECT` statements.
-    *   [x] `ORDER BY` and `LIMIT` clauses.
-    *   [x] `TRUNCATE TABLE` statements.
-    *   [x] `ALTER TABLE` for schema modifications.
 *   **Advanced Data Types**:
     *   [ ] Collection types: `list`, `set`, and `map`.
     *   [ ] User-Defined Types (UDTs).
