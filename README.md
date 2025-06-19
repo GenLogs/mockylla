@@ -50,11 +50,13 @@ This library is currently in the early stages of development. Here is a summary 
 *   Intercepting database connections.
 *   Mocking of `CREATE KEYSPACE` statements.
 *   Mocking of `CREATE TABLE` statements.
+*   Mocking of `ALTER TABLE` statements (`ADD` only).
 *   Mocking of `DROP TABLE` statements.
+*   Mocking of `TRUNCATE TABLE` statements.
 *   Mocking of `INSERT` statements.
-*   Mocking of `SELECT` statements (basic `WHERE` clauses with `AND` supported, including `=`, `>`, `<`, `>=`, `<=`).
+*   Mocking of `SELECT` statements (with `WHERE`, `ORDER BY`, and `LIMIT` clauses).
 *   Mocking of `UPDATE` and `DELETE` statements.
-*   An inspection API to view created keyspaces (`get_keyspaces`) and table data (`get_table_rows`).
+*   An inspection API to view created keyspaces (`get_keyspaces`), tables (`get_tables`), and table data (`get_table_rows`).
 
 ### Future Goals:
 
