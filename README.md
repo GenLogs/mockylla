@@ -64,7 +64,7 @@ Our roadmap is focused on expanding the CQL support to cover the most common ope
 
 *   **Advanced Data Types**:
     *   [x] Collection types: `list`, `set`, and `map`.
-    *   [ ] User-Defined Types (UDTs).
+    *   [x] User-Defined Types (UDTs).
 *   **Advanced DML**:
     *   [ ] `BATCH` statements for atomic operations.
     *   [ ] Lightweight Transactions (LWT) with `IF EXISTS` / `IF NOT EXISTS`.

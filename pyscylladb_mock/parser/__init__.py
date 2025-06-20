@@ -12,6 +12,7 @@ from pyscylladb_mock.parser.insert import handle_insert_into
 from pyscylladb_mock.parser.select import handle_select_from
 from pyscylladb_mock.parser.truncate import handle_truncate_table
 from pyscylladb_mock.parser.update import handle_update
+from pyscylladb_mock.parser.type import handle_create_type
 
 
 def handle_query(query, session, state, parameters=None):
@@ -38,6 +39,16 @@ def handle_query(query, session, state, parameters=None):
     )
     if create_table_match:
         handle_create_table(create_table_match, session, state)
+        return ResultSet([])
+
+    # Simple CREATE TYPE parser
+    create_type_match = re.match(
+        r"^\s*CREATE\s+TYPE\s+(?:IF NOT EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*;?\s*$",
+        query,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if create_type_match:
+        handle_create_type(create_type_match, session, state)
         return ResultSet([])
 
     # Simple INSERT INTO parser

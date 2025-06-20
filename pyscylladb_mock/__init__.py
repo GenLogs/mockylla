@@ -30,7 +30,8 @@ class ScyllaState:
                             }
                         ],
                     }
-                }
+                },
+                "types": {},
             }
         }
 
@@ -151,3 +152,14 @@ def get_table_rows(keyspace_name, table_name):
             f"Table '{table_name}' does not exist in keyspace '{keyspace_name}'."
         )
     return tables[table_name]["data"]
+
+
+def get_types(keyspace_name):
+    """Returns a dictionary of the created types for a given keyspace."""
+    if _global_state is None:
+        raise Exception("Mock is not active.")
+    if keyspace_name not in _global_state.keyspaces:
+        raise Exception(
+            f"Keyspace '{keyspace_name}' does not exist in mock state."
+        )
+    return _global_state.keyspaces[keyspace_name].get("types", {})

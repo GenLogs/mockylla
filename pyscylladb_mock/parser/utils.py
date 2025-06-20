@@ -14,14 +14,25 @@ def cast_value(value, cql_type):
             return value
 
 
+def get_keyspace_and_name(name_full, session_keyspace):
+    """
+    Splits a full name like 'keyspace.name' into its components.
+    Uses the session keyspace if no keyspace is specified.
+    """
+    if "." in name_full:
+        keyspace_name, name = name_full.split(".", 1)
+    elif session_keyspace:
+        keyspace_name, name = session_keyspace, name_full
+    else:
+        raise Exception(f"No keyspace specified for {name_full}")
+    return keyspace_name, name
+
+
 def get_table(table_name_full, session, state):
     """Get keyspace, table name and table data from state."""
-    if "." in table_name_full:
-        keyspace_name, table_name = table_name_full.split(".", 1)
-    elif session.keyspace:
-        keyspace_name, table_name = session.keyspace, table_name_full
-    else:
-        raise Exception(f"No keyspace specified for table {table_name_full}")
+    keyspace_name, table_name = get_keyspace_and_name(
+        table_name_full, session.keyspace
+    )
 
     if (
         keyspace_name not in state.keyspaces
