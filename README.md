@@ -63,7 +63,7 @@ This library is currently in the early stages of development. Here is a summary 
 Our roadmap is focused on expanding the CQL support to cover the most common operations developers use. Here are some of the features we're planning to add:
 
 *   **Advanced DML**:
-    *   [ ] `BATCH` statements for atomic operations.
+    *   [x] `BATCH` statements for atomic operations.
     *   [ ] Lightweight Transactions (LWT) with `IF EXISTS` / `IF NOT EXISTS`.
 *   **Improved Testability**:
     *   [ ] Simulating specific database errors.

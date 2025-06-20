@@ -2,6 +2,7 @@ import re
 
 from pyscylladb_mock.results import ResultSet
 from pyscylladb_mock.parser.alter import handle_alter_table
+from pyscylladb_mock.parser.batch import handle_batch
 from pyscylladb_mock.parser.create import (
     handle_create_keyspace,
     handle_create_table,
@@ -20,6 +21,16 @@ def handle_query(query, session, state, parameters=None):
     Parses and handles a CQL query.
     """
     query = query.strip()
+
+    # BATCH statement parser
+    batch_match = re.match(
+        r"^\s*BEGIN\s+BATCH\s+(.*?)\s+APPLY\s+BATCH\s*;?\s*$",
+        query,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if batch_match:
+        handle_batch(batch_match, session, state, parameters=parameters)
+        return ResultSet([])
 
     # Simple CREATE KEYSPACE parser
     create_keyspace_match = re.match(
