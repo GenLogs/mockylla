@@ -40,6 +40,73 @@ def test_my_app_creates_a_keyspace():
     assert keyspace_name in created_keyspaces
 ```
 
+### More Examples
+
+Below is a more comprehensive example that demonstrates creating a table, inserting, querying, updating, and deleting data.
+
+```python
+from pyscylladb_mock import mock_scylladb, get_table_rows
+from cassandra.cluster import Cluster
+
+@mock_scylladb
+def test_crud_operations():
+    # 1. Arrange: Connect and set up the schema
+    cluster = Cluster(['127.0.0.1'])
+    session = cluster.connect()
+    keyspace_name = "crud_app"
+    table_name = "users"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} "
+        "WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}"
+    )
+    session.set_keyspace(keyspace_name)
+
+    session.execute(f"""
+        CREATE TABLE {table_name} (
+            user_id int PRIMARY KEY,
+            name text,
+            email text
+        )
+    """)
+
+    # 2. Act & Assert: Insert data
+    session.execute(
+        f"INSERT INTO {table_name} (user_id, name, email) "
+        "VALUES (1, 'Alice', 'alice@example.com')"
+    )
+    session.execute(
+        f"INSERT INTO {table_name} (user_id, name, email) "
+        "VALUES (2, 'Bob', 'bob@example.com')"
+    )
+
+    rows = get_table_rows(keyspace_name, table_name)
+    assert len(rows) == 2
+    assert rows[0]['name'] == 'Alice'
+
+    # 3. Act & Assert: Select data
+    selection_result = session.execute(f"SELECT * FROM {table_name} WHERE user_id = 1")
+    selected_row = selection_result.one()
+    assert selected_row.name == 'Alice'
+    assert selected_row.email == 'alice@example.com'
+
+    # 4. Act & Assert: Update data
+    session.execute(
+        f"UPDATE {table_name} SET email = 'alice_updated@example.com' "
+        "WHERE user_id = 1"
+    )
+
+    updated_rows = get_table_rows(keyspace_name, table_name)
+    assert updated_rows[0]['email'] == 'alice_updated@example.com'
+
+    # 5. Act & Assert: Delete data
+    session.execute(f"DELETE FROM {table_name} WHERE user_id = 2")
+
+    final_rows = get_table_rows(keyspace_name, table_name)
+    assert len(final_rows) == 1
+    assert final_rows[0]['user_id'] == 1
+```
+
 ## Project Scope & Development Roadmap
 
 This library is currently in the early stages of development. Here is a summary of what is currently supported and what is planned for the future.
