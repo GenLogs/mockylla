@@ -53,15 +53,20 @@ def handle_create_table(create_table_match, session, state):
             f"Table '{table_name}' already exists in keyspace '{keyspace_name}'"
         )
 
+    primary_key = []
     # A more robust column parser that handles inline and separate PRIMARY KEY definitions.
 
-    # First, remove the PRIMARY KEY clause to handle it separately if needed.
+    # First, find and store the PRIMARY KEY definition.
     pk_match = re.search(
         r"PRIMARY\s+KEY\s*\((.*?)\)", columns_str, re.IGNORECASE
     )
     if pk_match:
-        # For now, we just remove it to correctly parse columns.
-        # We could store the primary key info later if needed.
+        pk_def = pk_match.group(1)
+        # Handle cases like ((col1, col2), col3) - we'll just get all column names
+        pk_columns_str = pk_def.replace("(", "").replace(")", "")
+        pk_cols = [c.strip() for c in pk_columns_str.split(",") if c.strip()]
+        primary_key.extend(pk_cols)
+        # Remove it from the main string to not confuse column parsing
         columns_str = (
             columns_str[: pk_match.start()] + columns_str[pk_match.end() :]
         )
@@ -74,6 +79,9 @@ def handle_create_table(create_table_match, session, state):
         if len(parts) == 2:
             name, type_ = parts
             # Further strip any inline PRIMARY KEY declarations
+            if "PRIMARY KEY" in type_.upper():
+                if name not in primary_key:
+                    primary_key.append(name)
             type_ = re.sub(
                 r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE
             ).strip()
@@ -83,6 +91,7 @@ def handle_create_table(create_table_match, session, state):
 
     state.keyspaces[keyspace_name]["tables"][table_name] = {
         "schema": schema,
+        "primary_key": primary_key,
         "data": [],
     }
     print(

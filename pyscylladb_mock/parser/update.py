@@ -4,11 +4,17 @@ from pyscylladb_mock.parser.utils import (
     parse_where_clause,
     cast_value,
 )
+from pyscylladb_mock.row import Row
 
 
 def handle_update(update_match, session, state):
     """Handle UPDATE query by parsing and executing the update operation."""
-    table_name_full, set_clause_str, where_clause_str = update_match.groups()
+    (
+        table_name_full,
+        set_clause_str,
+        where_clause_str,
+        if_exists,
+    ) = update_match.groups()
 
     # Get table info
     _, table_name, table = get_table(table_name_full, session, state)
@@ -24,15 +30,22 @@ def handle_update(update_match, session, state):
     rows_updated = __update_existing_rows(
         table, parsed_conditions, set_operations, counter_operations
     )
+
+    if if_exists:
+        if rows_updated > 0:
+            print(f"Updated {rows_updated} rows in '{table_name}'")
+            return [Row(["[applied]"], [True])]
+        else:
+            return [Row(["[applied]"], [False])]
+
     if rows_updated > 0:
         print(f"Updated {rows_updated} rows in '{table_name}'")
         return []
 
-    # Handle upsert case
+    # Handle upsert case for non-LWT
     __handle_upsert(
         table, table_name, parsed_conditions, set_operations, counter_operations
     )
-    print(f"Updated {rows_updated} rows in '{table_name}'")
     return []
 
 

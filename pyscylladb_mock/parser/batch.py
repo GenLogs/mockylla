@@ -15,7 +15,7 @@ def handle_batch(batch_match, session, state, parameters=None):
     for query in queries:
         # Attempt to match an INSERT statement
         insert_match = re.match(
-            r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*$",
+            r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(IF NOT EXISTS)?\s*;?\s*$",
             query,
             re.IGNORECASE | re.DOTALL,
         )
@@ -27,7 +27,7 @@ def handle_batch(batch_match, session, state, parameters=None):
 
         # Attempt to match an UPDATE statement
         update_match = re.match(
-            r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*)\s*$",
+            r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
             query,
             re.IGNORECASE | re.DOTALL,
         )
@@ -37,7 +37,7 @@ def handle_batch(batch_match, session, state, parameters=None):
 
         # Attempt to match a DELETE statement
         delete_match = re.match(
-            r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*)\s*$",
+            r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
             query,
             re.IGNORECASE,
         )

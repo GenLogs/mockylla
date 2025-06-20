@@ -64,7 +64,7 @@ Our roadmap is focused on expanding the CQL support to cover the most common ope
 
 *   **Advanced DML**:
     *   [x] `BATCH` statements for atomic operations.
-    *   [ ] Lightweight Transactions (LWT) with `IF EXISTS` / `IF NOT EXISTS`.
+    *   [x] Lightweight Transactions (LWT) with `IF EXISTS` / `IF NOT EXISTS`.
 *   **Improved Testability**:
     *   [ ] Simulating specific database errors.
 

@@ -1,5 +1,6 @@
 import re
 from pyscylladb_mock.parser.utils import cast_value
+from pyscylladb_mock.row import Row
 
 
 def _parse_udt_literal(literal):
@@ -47,7 +48,12 @@ def _parse_values(values_str):
 
 
 def handle_insert_into(insert_match, session, state, parameters=None):
-    table_name_full, columns_str, values_str = insert_match.groups()
+    (
+        table_name_full,
+        columns_str,
+        values_str,
+        if_not_exists,
+    ) = insert_match.groups()
 
     # Determine keyspace and table name
     if "." in table_name_full:
@@ -59,6 +65,7 @@ def handle_insert_into(insert_match, session, state, parameters=None):
 
     table_info = state.keyspaces[keyspace_name]["tables"][table_name]
     table_schema = table_info["schema"]
+    primary_key_cols = table_info.get("primary_key", [])
     defined_types = state.keyspaces[keyspace_name].get("types", {})
 
     if (
@@ -85,7 +92,7 @@ def handle_insert_into(insert_match, session, state, parameters=None):
             if isinstance(val, str):
                 row_data[col] = _parse_udt_literal(val)
             else:
-                row_data[col] = val
+                row_data[col] = cast_value(val, cql_type)
         elif cql_type:
             # It's a standard type
             if isinstance(val, str):
@@ -95,8 +102,30 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         else:
             row_data[col] = val  # Fallback for unknown columns
 
-    state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
-        row_data
-    )
-    print(f"Inserted row into '{table_name}': {row_data}")
-    return []
+    if if_not_exists:
+        # LWT path
+        pk_to_insert = {
+            k: v for k, v in row_data.items() if k in primary_key_cols
+        }
+
+        for existing_row in table_info["data"]:
+            pk_existing = {
+                k: v for k, v in existing_row.items() if k in primary_key_cols
+            }
+            if pk_to_insert == pk_existing:
+                # Row exists, operation not applied
+                result_names = ["[applied]"] + list(existing_row.keys())
+                result_values = [False] + list(existing_row.values())
+                return [Row(result_names, result_values)]
+
+        # Row does not exist, apply the insert
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
+            row_data
+        )
+        return [Row(["[applied]"], [True])]
+    else:
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
+            row_data
+        )
+        print(f"Inserted row into '{table_name}': {row_data}")
+        return []

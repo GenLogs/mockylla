@@ -64,13 +64,15 @@ def handle_query(query, session, state, parameters=None):
 
     # Simple INSERT INTO parser
     insert_match = re.match(
-        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*;?\s*$",
+        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(IF NOT EXISTS)?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
     if insert_match:
-        handle_insert_into(insert_match, session, state, parameters=parameters)
-        return ResultSet([])
+        result = handle_insert_into(
+            insert_match, session, state, parameters=parameters
+        )
+        return ResultSet(result)
 
     select_match = re.match(
         (
@@ -88,22 +90,24 @@ def handle_query(query, session, state, parameters=None):
         return ResultSet(rows)
 
     update_match = re.match(
-        r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*)\s*;?\s*$",
+        r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
     if update_match:
-        handle_update(update_match, session, state)
-        return ResultSet([])
+        result = handle_update(update_match, session, state)
+        return ResultSet(result)
 
     delete_match = re.match(
-        r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*)\s*;?\s*$",
+        r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
         query,
         re.IGNORECASE,
     )
     if delete_match:
-        handle_delete_from(delete_match, session, state, parameters=parameters)
-        return ResultSet([])
+        result = handle_delete_from(
+            delete_match, session, state, parameters=parameters
+        )
+        return ResultSet(result)
 
     drop_table_match = re.match(
         r"^\s*DROP\s+TABLE\s+(?:IF EXISTS\s+)?([\w\.]+)\s*;?\s*$",

@@ -84,3 +84,37 @@ def test_delete_rows_with_multiple_conditions():
     # Check that correct rows remain
     remaining_vals = {(r["id"], r["category"]) for r in rows}
     assert remaining_vals == {(1, 20), (2, 10)}
+
+
+@mock_scylladb
+def test_delete_if_exists():
+    """
+    Tests the IF EXISTS clause for DELETE statements.
+    """
+    # Arrange
+    cluster = Cluster(["127.0.0.1"])
+    session = cluster.connect()
+    keyspace_name = "my_keyspace"
+    table_name = "my_table"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
+    )
+    session.set_keyspace(keyspace_name)
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
+    )
+    session.execute(f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')")
+    assert len(get_table_rows(keyspace_name, table_name)) == 1
+
+    # Act & Assert: Delete on non-existent row should fail
+    delete_fail_query = f"DELETE FROM {table_name} WHERE id = 2 IF EXISTS"
+    result_fail = session.execute(delete_fail_query)
+    assert result_fail.one()["[applied]"] is False
+    assert len(get_table_rows(keyspace_name, table_name)) == 1
+
+    # Act & Assert: Delete on existing row should succeed
+    delete_success_query = f"DELETE FROM {table_name} WHERE id = 1 IF EXISTS"
+    result_success = session.execute(delete_success_query)
+    assert result_success.one()["[applied]"] is True
+    assert len(get_table_rows(keyspace_name, table_name)) == 0
