@@ -14,7 +14,7 @@ from pyscylladb_mock.parser.truncate import handle_truncate_table
 from pyscylladb_mock.parser.update import handle_update
 
 
-def handle_query(query, session, state):
+def handle_query(query, session, state, parameters=None):
     """
     Parses and handles a CQL query.
     """
@@ -47,7 +47,7 @@ def handle_query(query, session, state):
         re.IGNORECASE | re.DOTALL,
     )
     if insert_match:
-        handle_insert_into(insert_match, session, state)
+        handle_insert_into(insert_match, session, state, parameters=parameters)
         return ResultSet([])
 
     select_match = re.match(
@@ -80,7 +80,7 @@ def handle_query(query, session, state):
         re.IGNORECASE,
     )
     if delete_match:
-        handle_delete_from(delete_match, session, state)
+        handle_delete_from(delete_match, session, state, parameters=parameters)
         return ResultSet([])
 
     drop_table_match = re.match(
@@ -110,4 +110,4 @@ def handle_query(query, session, state):
         handle_alter_table(alter_table_match, session, state)
         return ResultSet([])
 
-    return ResultSet([])
+    return f"Error: Unsupported query: {query}"

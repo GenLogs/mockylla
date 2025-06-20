@@ -44,11 +44,19 @@ def handle_create_table(create_table_match, session, state):
         )
 
     column_defs = [c.strip() for c in columns_str.split(",") if c.strip()]
-    columns = [c.split() for c in column_defs]
 
-    schema = {
-        name: type_ for name, type_, *_ in columns if name
-    }  # Use _ to ignore extra parts and check for name
+    columns = []
+    for c in column_defs:
+        parts = c.split(None, 1)
+        if len(parts) == 2:
+            name, type_ = parts
+            # Further strip any inline PRIMARY KEY declarations
+            type_ = re.sub(
+                r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE
+            ).strip()
+            columns.append((name, type_))
+
+    schema = {name: type_ for name, type_ in columns if name}
 
     state.keyspaces[keyspace_name]["tables"][table_name] = {
         "schema": schema,

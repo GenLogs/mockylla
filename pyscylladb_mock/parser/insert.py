@@ -1,7 +1,7 @@
 from pyscylladb_mock.parser.utils import cast_value
 
 
-def handle_insert_into(insert_match, session, state):
+def handle_insert_into(insert_match, session, state, parameters=None):
     table_name_full, columns_str, values_str = insert_match.groups()
 
     # Determine keyspace and table name
@@ -23,8 +23,12 @@ def handle_insert_into(insert_match, session, state):
         raise Exception(f"Table '{table_name_full}' does not exist")
 
     columns = [c.strip() for c in columns_str.split(",")]
-    # This is a very simplistic value parser. It doesn't handle strings with commas, etc.
-    values = [v.strip().strip("'\"") for v in values_str.split(",")]
+
+    if parameters:
+        values = parameters
+    else:
+        # This is a very simplistic value parser. It doesn't handle strings with commas, etc.
+        values = [v.strip().strip("'\"") for v in values_str.split(",")]
 
     if len(columns) != len(values):
         raise Exception("Number of columns does not match number of values")
