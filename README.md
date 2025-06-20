@@ -50,22 +50,14 @@ This library is currently in the early stages of development. Here is a summary 
 *   Intercepting database connections.
 *   Mocking of `CREATE KEYSPACE` statements.
 *   Mocking of `CREATE TABLE` statements.
+*   Mocking of `CREATE TYPE` for user-defined types.
 *   Mocking of `ALTER TABLE` statements (`ADD` only).
 *   Mocking of `DROP TABLE` statements.
 *   Mocking of `TRUNCATE TABLE` statements.
 *   Mocking of `INSERT` statements.
 *   Mocking of `SELECT` statements (with `WHERE`, `ORDER BY`, and `LIMIT` clauses).
 *   Mocking of `UPDATE` and `DELETE` statements.
-*   An inspection API to view created keyspaces (`get_keyspaces`), tables (`get_tables`), and table data (`get_table_rows`).
-
-### Future Goals:
-
-Our roadmap is focused on expanding the CQL support to cover the most common operations developers use. Here are some of the features we're planning to add:
-
-*   **Advanced DML**:
-    *   [x] `BATCH` statements for atomic operations.
-    *   [x] Lightweight Transactions (LWT) with `IF EXISTS` / `IF NOT EXISTS`.
-*   **Improved Testability**:
-    *   [ ] Simulating specific database errors.
+*   Mocking of `BATCH` statements.
+*   An inspection API to view created keyspaces (`get_keyspaces`), tables (`get_tables`), types (`get_types`), and table data (`get_table_rows`).
 
 We welcome contributions to help build out these features!
