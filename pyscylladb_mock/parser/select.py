@@ -1,4 +1,5 @@
 from .utils import get_table, parse_where_clause, check_row_conditions
+from pyscylladb_mock.row import Row
 
 
 def handle_select_from(select_match, session, state):
@@ -30,7 +31,7 @@ def handle_select_from(select_match, session, state):
         filtered_data = __apply_limit(filtered_data, limit_str)
 
     # Select requested columns
-    result_set = __select_columns(filtered_data, columns_str)
+    result_set = __select_columns(filtered_data, columns_str, schema)
 
     print(f"Selected {len(result_set)} rows from '{table_name}'")
     return result_set
@@ -76,11 +77,21 @@ def __apply_limit(filtered_data, limit_str):
     return filtered_data[: int(limit_str)]
 
 
-def __select_columns(filtered_data, columns_str):
+def __select_columns(filtered_data, columns_str, schema):
     """Select specified columns from filtered data."""
     select_cols_str = columns_str.strip()
-    if select_cols_str == "*":
-        return filtered_data
+    ordered_keys = list(schema.keys())
 
-    select_cols = [c.strip() for c in select_cols_str.split(",")]
-    return [{col: row.get(col) for col in select_cols} for row in filtered_data]
+    if select_cols_str == "*":
+        select_cols = ordered_keys
+    else:
+        select_cols = [c.strip() for c in select_cols_str.split(",")]
+
+    # Create a list of Row objects
+    result_set = []
+    for row_dict in filtered_data:
+        # Ensure that the values are in the same order as select_cols
+        values = [row_dict.get(col) for col in select_cols]
+        result_set.append(Row(names=select_cols, values=values))
+
+    return result_set

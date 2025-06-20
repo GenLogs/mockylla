@@ -1,4 +1,8 @@
-from .utils import get_table, parse_where_clause, check_row_conditions
+from pyscylladb_mock.parser.utils import (
+    get_table,
+    parse_where_clause,
+    check_row_conditions,
+)
 
 
 def handle_delete_from(delete_match, session, state):

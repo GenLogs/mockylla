@@ -101,6 +101,7 @@ class MockSession:
             )
         self.keyspace = keyspace
         self.state = state
+        print(f"Set keyspace to: {keyspace}")
 
     def set_keyspace(self, keyspace):
         """Sets the current keyspace for the session."""
@@ -111,6 +112,24 @@ class MockSession:
 
     def execute(self, query, parameters=None):
         print(f"MockSession execute called with query: {query}")
+        if parameters:
+            # Simple parameter substitution for %s placeholders
+            # This is a basic implementation and might need to be more robust for production use.
+            query_parts = query.split("%s")
+            if len(query_parts) - 1 != len(parameters):
+                raise ValueError(
+                    "Number of parameters does not match number of placeholders"
+                )
+
+            final_query = query_parts[0]
+            for i, param in enumerate(parameters):
+                # Add quotes for string parameters
+                param_str = (
+                    f"'{param}'" if isinstance(param, str) else str(param)
+                )
+                final_query += param_str + query_parts[i + 1]
+            query = final_query
+
         return handle_query(query, self, self.state)
 
 

@@ -1,3 +1,6 @@
+import re
+
+
 def handle_create_keyspace(create_keyspace_match, state):
     keyspace_name = create_keyspace_match.group(1)
     if keyspace_name in state.keyspaces:
@@ -28,15 +31,24 @@ def handle_create_table(create_table_match, session, state):
         )
 
     # A more robust column parser that handles inline and separate PRIMARY KEY definitions.
+
+    # First, remove the PRIMARY KEY clause to handle it separately if needed.
+    pk_match = re.search(
+        r"PRIMARY\s+KEY\s*\((.*?)\)", columns_str, re.IGNORECASE
+    )
+    if pk_match:
+        # For now, we just remove it to correctly parse columns.
+        # We could store the primary key info later if needed.
+        columns_str = (
+            columns_str[: pk_match.start()] + columns_str[pk_match.end() :]
+        )
+
     column_defs = [c.strip() for c in columns_str.split(",") if c.strip()]
-    columns = [
-        c.split()
-        for c in column_defs
-        if not c.upper().startswith("PRIMARY KEY")
-    ]
+    columns = [c.split() for c in column_defs]
+
     schema = {
-        name: type_ for name, type_, *_ in columns
-    }  # Use _ to ignore extra parts like 'PRIMARY KEY' in column def
+        name: type_ for name, type_, *_ in columns if name
+    }  # Use _ to ignore extra parts and check for name
 
     state.keyspaces[keyspace_name]["tables"][table_name] = {
         "schema": schema,

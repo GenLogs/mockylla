@@ -1,4 +1,4 @@
-from .utils import cast_value
+from pyscylladb_mock.parser.utils import cast_value
 
 
 def handle_insert_into(insert_match, session, state):

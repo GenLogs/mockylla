@@ -1,13 +1,17 @@
 import re
 
-from .alter import handle_alter_table
-from .create import handle_create_keyspace, handle_create_table
-from .delete import handle_delete_from
-from .drop import handle_drop_table
-from .insert import handle_insert_into
-from .select import handle_select_from
-from .truncate import handle_truncate_table
-from .update import handle_update
+from pyscylladb_mock.results import ResultSet
+from pyscylladb_mock.parser.alter import handle_alter_table
+from pyscylladb_mock.parser.create import (
+    handle_create_keyspace,
+    handle_create_table,
+)
+from pyscylladb_mock.parser.delete import handle_delete_from
+from pyscylladb_mock.parser.drop import handle_drop_table
+from pyscylladb_mock.parser.insert import handle_insert_into
+from pyscylladb_mock.parser.select import handle_select_from
+from pyscylladb_mock.parser.truncate import handle_truncate_table
+from pyscylladb_mock.parser.update import handle_update
 
 
 def handle_query(query, session, state):
@@ -23,7 +27,8 @@ def handle_query(query, session, state):
         re.IGNORECASE,
     )
     if create_keyspace_match:
-        return handle_create_keyspace(create_keyspace_match, state)
+        handle_create_keyspace(create_keyspace_match, state)
+        return ResultSet([])
 
     # Simple CREATE TABLE parser
     create_table_match = re.match(
@@ -32,7 +37,8 @@ def handle_query(query, session, state):
         re.IGNORECASE | re.DOTALL,  # DOTALL allows . to match newlines
     )
     if create_table_match:
-        return handle_create_table(create_table_match, session, state)
+        handle_create_table(create_table_match, session, state)
+        return ResultSet([])
 
     # Simple INSERT INTO parser
     insert_match = re.match(
@@ -41,7 +47,8 @@ def handle_query(query, session, state):
         re.IGNORECASE | re.DOTALL,
     )
     if insert_match:
-        return handle_insert_into(insert_match, session, state)
+        handle_insert_into(insert_match, session, state)
+        return ResultSet([])
 
     select_match = re.match(
         (
@@ -55,7 +62,8 @@ def handle_query(query, session, state):
         re.IGNORECASE | re.DOTALL,
     )
     if select_match:
-        return handle_select_from(select_match, session, state)
+        rows = handle_select_from(select_match, session, state)
+        return ResultSet(rows)
 
     update_match = re.match(
         r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*)\s*;?\s*$",
@@ -63,7 +71,8 @@ def handle_query(query, session, state):
         re.IGNORECASE | re.DOTALL,
     )
     if update_match:
-        return handle_update(update_match, session, state)
+        handle_update(update_match, session, state)
+        return ResultSet([])
 
     delete_match = re.match(
         r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*)\s*;?\s*$",
@@ -71,7 +80,8 @@ def handle_query(query, session, state):
         re.IGNORECASE,
     )
     if delete_match:
-        return handle_delete_from(delete_match, session, state)
+        handle_delete_from(delete_match, session, state)
+        return ResultSet([])
 
     drop_table_match = re.match(
         r"^\s*DROP\s+TABLE\s+(?:IF EXISTS\s+)?([\w\.]+)\s*;?\s*$",
@@ -79,7 +89,8 @@ def handle_query(query, session, state):
         re.IGNORECASE,
     )
     if drop_table_match:
-        return handle_drop_table(drop_table_match, session, state)
+        handle_drop_table(drop_table_match, session, state)
+        return ResultSet([])
 
     truncate_table_match = re.match(
         r"^\s*TRUNCATE\s+(?:TABLE\s+)?([\w\.]+)\s*;?\s*$",
@@ -87,7 +98,8 @@ def handle_query(query, session, state):
         re.IGNORECASE,
     )
     if truncate_table_match:
-        return handle_truncate_table(truncate_table_match, session, state)
+        handle_truncate_table(truncate_table_match, session, state)
+        return ResultSet([])
 
     alter_table_match = re.match(
         r"^\s*ALTER\s+TABLE\s+([\w\.]+)\s+ADD\s+([\w\s,]+)\s+([\w\s,]+)\s*;?\s*$",
@@ -95,6 +107,7 @@ def handle_query(query, session, state):
         re.IGNORECASE,
     )
     if alter_table_match:
-        return handle_alter_table(alter_table_match, session, state)
+        handle_alter_table(alter_table_match, session, state)
+        return ResultSet([])
 
-    return []
+    return ResultSet([])
