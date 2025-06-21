@@ -86,21 +86,22 @@ wheels = [
 [[package]]
 name = "pyscylladb-mock"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "scylla-driver" },
 ]
 
-[package.dev-dependencies]
+[package.optional-dependencies]
 dev = [
     { name = "pytest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "scylla-driver" }]
-
-[package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=8.4.1" }]
+requires-dist = [
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.1" },
+    { name = "scylla-driver" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "pytest"
