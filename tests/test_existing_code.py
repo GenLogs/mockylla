@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from mockylla import mock_scylladb
 from cassandra.cluster import Cluster, DCAwareRoundRobinPolicy
 from cassandra import ConsistencyLevel
+from typing import List, Tuple
 
 
 @dataclass
@@ -53,7 +54,7 @@ class DataStorage:
         except Exception as e:
             raise e
 
-    def get_data(self) -> list[tuple[str, str]]:
+    def get_data(self) -> List[Tuple[str, str]]:
         try:
             query = """
             SELECT * FROM data_storage;
