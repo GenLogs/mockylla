@@ -23,3 +23,6 @@ dependencies = ["scylla-driver"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0.1", "ruff>=0.0.17"]
+
+[tool.ruff]
+line-length = 80

@@ -101,7 +101,9 @@ class MockCluster:
 class MockSession:
     def __init__(self, keyspace=None, state=None):
         if state is None:
-            raise ValueError("MockSession must be initialized with a state object.")
+            raise ValueError(
+                "MockSession must be initialized with a state object."
+            )
         self.keyspace = keyspace
         self.state = state
         print(f"Set keyspace to: {keyspace}")
@@ -154,7 +156,9 @@ def get_tables(keyspace_name):
     if _global_state is None:
         raise Exception("Mock is not active.")
     if keyspace_name not in _global_state.keyspaces:
-        raise Exception(f"Keyspace '{keyspace_name}' does not exist in mock state.")
+        raise Exception(
+            f"Keyspace '{keyspace_name}' does not exist in mock state."
+        )
     return _global_state.keyspaces[keyspace_name]["tables"]
 
 
@@ -173,5 +177,7 @@ def get_types(keyspace_name):
     if _global_state is None:
         raise Exception("Mock is not active.")
     if keyspace_name not in _global_state.keyspaces:
-        raise Exception(f"Keyspace '{keyspace_name}' does not exist in mock state.")
+        raise Exception(
+            f"Keyspace '{keyspace_name}' does not exist in mock state."
+        )
     return _global_state.keyspaces[keyspace_name].get("types", {})

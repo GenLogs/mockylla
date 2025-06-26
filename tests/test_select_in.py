@@ -36,5 +36,7 @@ def test_select_with_in_clause():
     assert len(list(rows)) == 1
     assert list(rows)[0]["name"] == "Bob"
 
-    rows = session.execute(f"SELECT * FROM {table_name} WHERE name IN ('David')")
+    rows = session.execute(
+        f"SELECT * FROM {table_name} WHERE name IN ('David')"
+    )
     assert len(list(rows)) == 0

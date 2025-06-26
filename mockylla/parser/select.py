@@ -18,7 +18,9 @@ def handle_select_from(select_match, session, state):
     filtered_data = __apply_where_filters(table_data, where_clause_str, schema)
 
     if order_by_clause_str:
-        filtered_data = __apply_order_by(filtered_data, order_by_clause_str, schema)
+        filtered_data = __apply_order_by(
+            filtered_data, order_by_clause_str, schema
+        )
 
     if limit_str:
         filtered_data = __apply_limit(filtered_data, limit_str)
@@ -35,7 +37,11 @@ def __apply_where_filters(table_data, where_clause_str, schema):
         return list(table_data)
 
     parsed_conditions = parse_where_clause(where_clause_str, schema)
-    return [row for row in table_data if check_row_conditions(row, parsed_conditions)]
+    return [
+        row
+        for row in table_data
+        if check_row_conditions(row, parsed_conditions)
+    ]
 
 
 def __apply_order_by(filtered_data, order_by_clause_str, schema):
@@ -49,7 +55,9 @@ def __apply_order_by(filtered_data, order_by_clause_str, schema):
         raise Exception(f"Invalid ORDER BY direction: {order_dir}")
 
     if filtered_data and order_col not in schema:
-        raise Exception(f"Column '{order_col}' in ORDER BY not found in table schema")
+        raise Exception(
+            f"Column '{order_col}' in ORDER BY not found in table schema"
+        )
 
     return sorted(
         filtered_data,

@@ -18,7 +18,9 @@ def test_alter_table_add_column():
         "WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}"
     )
     session.set_keyspace(keyspace_name)
-    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)")
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
+    )
 
     session.execute(f"ALTER TABLE {table_name} ADD new_column int")
 

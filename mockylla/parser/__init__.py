@@ -64,7 +64,9 @@ def handle_query(query, session, state, parameters=None):
         re.IGNORECASE | re.DOTALL,
     )
     if insert_match:
-        result = handle_insert_into(insert_match, session, state, parameters=parameters)
+        result = handle_insert_into(
+            insert_match, session, state, parameters=parameters
+        )
         return ResultSet(result)
 
     select_match = re.match(
@@ -97,7 +99,9 @@ def handle_query(query, session, state, parameters=None):
         re.IGNORECASE,
     )
     if delete_match:
-        result = handle_delete_from(delete_match, session, state, parameters=parameters)
+        result = handle_delete_from(
+            delete_match, session, state, parameters=parameters
+        )
         return ResultSet(result)
 
     drop_table_match = re.match(

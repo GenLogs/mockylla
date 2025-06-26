@@ -53,7 +53,9 @@ def handle_create_table(create_table_match, session, state):
         )
 
     primary_key = []
-    pk_match = re.search(r"PRIMARY\s+KEY\s*\((.*?)\)", columns_str, re.IGNORECASE)
+    pk_match = re.search(
+        r"PRIMARY\s+KEY\s*\((.*?)\)", columns_str, re.IGNORECASE
+    )
     if pk_match:
         pk_def = pk_match.group(1)
 
@@ -61,7 +63,9 @@ def handle_create_table(create_table_match, session, state):
         pk_cols = [c.strip() for c in pk_columns_str.split(",") if c.strip()]
         primary_key.extend(pk_cols)
 
-        columns_str = columns_str[: pk_match.start()] + columns_str[pk_match.end() :]
+        columns_str = (
+            columns_str[: pk_match.start()] + columns_str[pk_match.end() :]
+        )
 
     column_defs = _parse_column_defs(columns_str)
 
@@ -74,7 +78,9 @@ def handle_create_table(create_table_match, session, state):
             if "PRIMARY KEY" in type_.upper():
                 if name not in primary_key:
                     primary_key.append(name)
-            type_ = re.sub(r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE).strip()
+            type_ = re.sub(
+                r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE
+            ).strip()
             columns.append((name, type_))
 
     schema = {name: type_ for name, type_ in columns if name}

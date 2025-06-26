@@ -90,7 +90,9 @@ def test_delete_if_exists():
         f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
     )
     session.set_keyspace(keyspace_name)
-    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)")
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
+    )
     session.execute(f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')")
     assert len(get_table_rows(keyspace_name, table_name)) == 1
 

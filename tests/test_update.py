@@ -67,14 +67,18 @@ def test_update_if_exists():
         f"INSERT INTO {table_name} (id, name, value) VALUES (1, 'Alice', 10)"
     )
 
-    update_success_query = f"UPDATE {table_name} SET value = 20 WHERE id = 1 IF EXISTS"
+    update_success_query = (
+        f"UPDATE {table_name} SET value = 20 WHERE id = 1 IF EXISTS"
+    )
     result_success = session.execute(update_success_query)
     assert result_success.one()["[applied]"] is True
     rows = get_table_rows(keyspace_name, table_name)
     assert len(rows) == 1
     assert rows[0]["value"] == 20
 
-    update_fail_query = f"UPDATE {table_name} SET value = 30 WHERE id = 2 IF EXISTS"
+    update_fail_query = (
+        f"UPDATE {table_name} SET value = 30 WHERE id = 2 IF EXISTS"
+    )
     result_fail = session.execute(update_fail_query)
     assert result_fail.one()["[applied]"] is False
     assert len(get_table_rows(keyspace_name, table_name)) == 1
