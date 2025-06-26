@@ -1,8 +1,8 @@
 import re
 
-from pyscylladb_mock.parser.insert import handle_insert_into
-from pyscylladb_mock.parser.update import handle_update
-from pyscylladb_mock.parser.delete import handle_delete_from
+from mockylla.parser.insert import handle_insert_into
+from mockylla.parser.update import handle_update
+from mockylla.parser.delete import handle_delete_from
 
 
 def handle_batch(batch_match, session, state, parameters=None):

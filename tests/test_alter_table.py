@@ -3,7 +3,7 @@ from cassandra.protocol import SyntaxException
 
 import pytest
 
-from pyscylladb_mock import mock_scylladb, get_tables
+from mockylla import mock_scylladb, get_tables
 
 
 @mock_scylladb

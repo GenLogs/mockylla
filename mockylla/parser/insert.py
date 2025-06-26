@@ -1,6 +1,6 @@
 import re
-from pyscylladb_mock.parser.utils import cast_value
-from pyscylladb_mock.row import Row
+from mockylla.parser.utils import cast_value
+from mockylla.row import Row
 
 
 def _parse_udt_literal(literal):

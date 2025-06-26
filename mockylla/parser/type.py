@@ -1,4 +1,4 @@
-from pyscylladb_mock.parser.utils import get_keyspace_and_name
+from mockylla.parser.utils import get_keyspace_and_name
 
 
 def handle_create_type(match, session, state):

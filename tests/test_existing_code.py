@@ -1,6 +1,6 @@
 import unittest
 from dataclasses import dataclass
-from pyscylladb_mock import mock_scylladb
+from mockylla import mock_scylladb
 from cassandra.cluster import Cluster, DCAwareRoundRobinPolicy
 from cassandra import ConsistencyLevel
 

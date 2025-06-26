@@ -1,5 +1,5 @@
 from .utils import get_table, parse_where_clause, check_row_conditions
-from pyscylladb_mock.row import Row
+from mockylla.row import Row
 
 
 def handle_select_from(select_match, session, state):

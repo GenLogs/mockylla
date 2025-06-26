@@ -1,10 +1,10 @@
-# pyscylladb-mock
+# mockylla
 
-A lightweight and easy-to-use library for mocking ScyllaDB in your Python tests. Inspired by the simplicity of `moto` for AWS, `pyscylladb-mock` allows you to test your ScyllaDB-dependent code without needing a live database instance.
+A lightweight and easy-to-use library for mocking ScyllaDB in your Python tests. Inspired by the simplicity of `moto` for AWS, `mockylla` allows you to test your ScyllaDB-dependent code without needing a live database instance.
 
 ## The Goal
 
-The primary goal of `pyscylladb-mock` is to provide a seamless testing experience for developers working with ScyllaDB. We aim to create a mock that is:
+The primary goal of `mockylla` is to provide a seamless testing experience for developers working with ScyllaDB. We aim to create a mock that is:
 
 -   **Non-intrusive**: Use a simple decorator to mock all `scylla-driver` interactions. No changes to your application code are needed.
 -   **Fast & Isolated**: All mocking happens in-memory, ensuring your tests are fast and completely isolated from each other.
@@ -12,14 +12,14 @@ The primary goal of `pyscylladb-mock` is to provide a seamless testing experienc
 
 ## How It Works
 
-`pyscylladb-mock` works by patching the underlying `scylla-driver` at runtime. When you decorate a test function with `@mock_scylladb`, the library intercepts any calls that would normally go to a ScyllaDB cluster and redirects them to an in-memory mock backend.
+`mockylla` works by patching the underlying `scylla-driver` at runtime. When you decorate a test function with `@mock_scylladb`, the library intercepts any calls that would normally go to a ScyllaDB cluster and redirects them to an in-memory mock backend.
 
 ## Usage Example
 
-Here's a quick look at how you can use `pyscylladb-mock` in your tests:
+Here's a quick look at how you can use `mockylla` in your tests:
 
 ```python
-from pyscylladb_mock import mock_scylladb, get_keyspaces
+from mocylla import mock_scylladb, get_keyspaces
 from cassandra.cluster import Cluster
 
 @mock_scylladb
@@ -45,7 +45,7 @@ def test_my_app_creates_a_keyspace():
 Below is a more comprehensive example that demonstrates creating a table, inserting, querying, updating, and deleting data.
 
 ```python
-from pyscylladb_mock import mock_scylladb, get_table_rows
+from mocylla import mock_scylladb, get_table_rows
 from cassandra.cluster import Cluster
 
 @mock_scylladb

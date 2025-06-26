@@ -1,7 +1,7 @@
 from cassandra.cluster import Cluster
 import pytest
 
-from pyscylladb_mock import mock_scylladb
+from mockylla import mock_scylladb
 
 
 @pytest.fixture

@@ -1,19 +1,19 @@
 import re
 
-from pyscylladb_mock.results import ResultSet
-from pyscylladb_mock.parser.alter import handle_alter_table
-from pyscylladb_mock.parser.batch import handle_batch
-from pyscylladb_mock.parser.create import (
+from mockylla.results import ResultSet
+from mockylla.parser.alter import handle_alter_table
+from mockylla.parser.batch import handle_batch
+from mockylla.parser.create import (
     handle_create_keyspace,
     handle_create_table,
 )
-from pyscylladb_mock.parser.delete import handle_delete_from
-from pyscylladb_mock.parser.drop import handle_drop_table
-from pyscylladb_mock.parser.insert import handle_insert_into
-from pyscylladb_mock.parser.select import handle_select_from
-from pyscylladb_mock.parser.truncate import handle_truncate_table
-from pyscylladb_mock.parser.update import handle_update
-from pyscylladb_mock.parser.type import handle_create_type
+from mockylla.parser.delete import handle_delete_from
+from mockylla.parser.drop import handle_drop_table
+from mockylla.parser.insert import handle_insert_into
+from mockylla.parser.select import handle_select_from
+from mockylla.parser.truncate import handle_truncate_table
+from mockylla.parser.update import handle_update
+from mockylla.parser.type import handle_create_type
 
 
 def handle_query(query, session, state, parameters=None):

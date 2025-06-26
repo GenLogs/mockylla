@@ -1,7 +1,7 @@
 from functools import wraps
 from unittest.mock import patch
 
-from pyscylladb_mock.parser import handle_query
+from mockylla.parser import handle_query
 
 # This is the path to the Connection factory in the scylla-driver
 CONNECTION_FACTORY_PATH = "cassandra.connection.Connection.factory"

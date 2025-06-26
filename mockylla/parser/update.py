@@ -1,10 +1,10 @@
 import re
-from pyscylladb_mock.parser.utils import (
+from mockylla.parser.utils import (
     get_table,
     parse_where_clause,
     cast_value,
 )
-from pyscylladb_mock.row import Row
+from mockylla.row import Row
 
 
 def handle_update(update_match, session, state):

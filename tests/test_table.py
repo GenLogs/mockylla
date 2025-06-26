@@ -1,4 +1,4 @@
-from pyscylladb_mock import mock_scylladb, get_tables
+from mockylla import mock_scylladb, get_tables
 from cassandra.cluster import Cluster
 
 

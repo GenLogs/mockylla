@@ -1,6 +1,6 @@
 from cassandra.cluster import Cluster
 
-from pyscylladb_mock import mock_scylladb, get_table_rows
+from mockylla import mock_scylladb, get_table_rows
 
 
 @mock_scylladb
