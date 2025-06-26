@@ -14,7 +14,9 @@ def test_execution_profile_name():
     cluster = Cluster(execution_profiles=profiles)
     session = cluster.connect()
 
-    rows = session.execute("SELECT * FROM system.local", execution_profile="node1")
+    rows = session.execute(
+        "SELECT * FROM system.local", execution_profile="node1"
+    )
 
     assert len(rows) == 1
 

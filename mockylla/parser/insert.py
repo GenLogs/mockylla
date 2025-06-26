@@ -100,7 +100,9 @@ def handle_insert_into(insert_match, session, state, parameters=None):
             row_data[col] = val
 
     if if_not_exists:
-        pk_to_insert = {k: v for k, v in row_data.items() if k in primary_key_cols}
+        pk_to_insert = {
+            k: v for k, v in row_data.items() if k in primary_key_cols
+        }
 
         for existing_row in table_info["data"]:
             pk_existing = {
@@ -111,9 +113,13 @@ def handle_insert_into(insert_match, session, state, parameters=None):
                 result_values = [False] + list(existing_row.values())
                 return [Row(result_names, result_values)]
 
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(row_data)
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
+            row_data
+        )
         return [Row(["[applied]"], [True])]
     else:
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(row_data)
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
+            row_data
+        )
         print(f"Inserted row into '{table_name}': {row_data}")
         return []

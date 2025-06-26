@@ -14,7 +14,9 @@ def test_integer_type_casting():
         f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
     )
     session.set_keyspace(keyspace_name)
-    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, value int)")
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, value int)"
+    )
 
     session.execute(f"INSERT INTO {table_name} (id, value) VALUES (1, 100)")
 
@@ -37,7 +39,9 @@ def test_numeric_comparison_in_where_clause():
         f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
     )
     session.set_keyspace(keyspace_name)
-    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, value int)")
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, value int)"
+    )
 
     session.execute(f"INSERT INTO {table_name} (id, value) VALUES (1, 5)")
     session.execute(f"INSERT INTO {table_name} (id, value) VALUES (2, 100)")

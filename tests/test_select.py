@@ -18,8 +18,12 @@ def test_select_all_from_table():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text, age int)"
     )
 
-    session.execute(f"INSERT INTO {table_name} (id, name, age) VALUES (1, 'Alice', 30)")
-    session.execute(f"INSERT INTO {table_name} (id, name, age) VALUES (2, 'Bob', 25)")
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, age) VALUES (1, 'Alice', 30)"
+    )
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, age) VALUES (2, 'Bob', 25)"
+    )
 
     result = session.execute(f"SELECT * FROM {table_name}")
     rows = list(result)
@@ -47,8 +51,12 @@ def test_select_with_where_clause():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text, age int)"
     )
 
-    session.execute(f"INSERT INTO {table_name} (id, name, age) VALUES (1, 'Alice', 30)")
-    session.execute(f"INSERT INTO {table_name} (id, name, age) VALUES (2, 'Bob', 25)")
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, age) VALUES (1, 'Alice', 30)"
+    )
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, age) VALUES (2, 'Bob', 25)"
+    )
 
     result = session.execute(f"SELECT * FROM {table_name} WHERE id = 2")
     rows = list(result)

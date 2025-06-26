@@ -19,7 +19,9 @@ def handle_update(update_match, session, state):
     _, table_name, table = get_table(table_name_full, session, state)
     schema = table["schema"]
 
-    set_operations, counter_operations = __parse_set_clause(set_clause_str, schema)
+    set_operations, counter_operations = __parse_set_clause(
+        set_clause_str, schema
+    )
     parsed_conditions = parse_where_clause(where_clause_str, schema)
 
     rows_updated = __update_existing_rows(

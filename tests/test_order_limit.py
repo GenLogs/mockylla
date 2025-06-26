@@ -19,12 +19,18 @@ def session():
         f"CREATE TABLE {table_name} (id INT PRIMARY KEY, name TEXT, age INT)"
     )
 
-    session.execute(f"INSERT INTO {table_name} (id, name, age) VALUES (1, 'Alice', 30)")
-    session.execute(f"INSERT INTO {table_name} (id, name, age) VALUES (2, 'Bob', 25)")
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, age) VALUES (1, 'Alice', 30)"
+    )
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, age) VALUES (2, 'Bob', 25)"
+    )
     session.execute(
         f"INSERT INTO {table_name} (id, name, age) VALUES (3, 'Charlie', 35)"
     )
-    session.execute(f"INSERT INTO {table_name} (id, name, age) VALUES (4, 'David', 25)")
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, age) VALUES (4, 'David', 25)"
+    )
     return session
 
 
@@ -58,7 +64,9 @@ def test_select_with_order_by_desc(session):
 
 def test_select_with_order_by_and_limit(session):
     table_name = "my_table"
-    rows = session.execute(f"SELECT * FROM {table_name} ORDER BY age DESC LIMIT 2")
+    rows = session.execute(
+        f"SELECT * FROM {table_name} ORDER BY age DESC LIMIT 2"
+    )
     results = list(rows)
     assert len(results) == 2
     assert results[0]["name"] == "Charlie"

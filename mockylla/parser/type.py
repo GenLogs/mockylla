@@ -6,7 +6,9 @@ def handle_create_type(match, session, state):
     Handles a CREATE TYPE statement.
     """
     type_name_str, fields_str = match.groups()
-    keyspace_name, type_name = get_keyspace_and_name(type_name_str, session.keyspace)
+    keyspace_name, type_name = get_keyspace_and_name(
+        type_name_str, session.keyspace
+    )
 
     if keyspace_name not in state.keyspaces:
         raise Exception(f"Keyspace '{keyspace_name}' does not exist")

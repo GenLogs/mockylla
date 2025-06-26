@@ -32,9 +32,7 @@ class Row(Sequence):
         return len(self._values)
 
     def __repr__(self):
-        return (
-            f"Row({', '.join(f'{n}={v!r}' for n, v in zip(self._names, self._values))})"
-        )
+        return f"Row({', '.join(f'{n}={v!r}' for n, v in zip(self._names, self._values))})"
 
     def __eq__(self, other):
         if isinstance(other, dict):

@@ -19,7 +19,9 @@ def handle_batch(batch_match, session, state, parameters=None):
             re.IGNORECASE | re.DOTALL,
         )
         if insert_match:
-            handle_insert_into(insert_match, session, state, parameters=parameters)
+            handle_insert_into(
+                insert_match, session, state, parameters=parameters
+            )
             continue
 
         update_match = re.match(
@@ -37,5 +39,7 @@ def handle_batch(batch_match, session, state, parameters=None):
             re.IGNORECASE,
         )
         if delete_match:
-            handle_delete_from(delete_match, session, state, parameters=parameters)
+            handle_delete_from(
+                delete_match, session, state, parameters=parameters
+            )
             continue

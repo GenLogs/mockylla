@@ -47,7 +47,9 @@ def test_create_table_with_udt():
     session.execute(f"CREATE TYPE {udt_name} (first_name text, last_name text)")
 
     table_name = "users"
-    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, user {udt_name})")
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, user {udt_name})"
+    )
 
     tables = get_tables(keyspace_name)
     assert table_name in tables
@@ -73,10 +75,14 @@ def test_insert_into_table_with_udt():
     session.execute(f"CREATE TYPE {udt_name} (first_name text, last_name text)")
 
     table_name = "users"
-    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, user {udt_name})")
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, user {udt_name})"
+    )
 
     user_data = "{first_name: 'John', last_name: 'Doe'}"
-    session.execute(f"INSERT INTO {table_name} (id, user) VALUES (1, {user_data})")
+    session.execute(
+        f"INSERT INTO {table_name} (id, user) VALUES (1, {user_data})"
+    )
 
     rows = get_table_rows(keyspace_name, table_name)
     assert len(rows) == 1
@@ -103,7 +109,9 @@ def test_select_from_table_with_udt():
     session.execute(f"CREATE TYPE {udt_name} (first_name text, last_name text)")
 
     table_name = "users"
-    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, user {udt_name})")
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, user {udt_name})"
+    )
 
     user_data_literal = "{first_name: 'Jane', last_name: 'Doe'}"
     session.execute(

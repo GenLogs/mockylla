@@ -7,14 +7,12 @@ name = "mockylla"
 version = "0.1.0"
 description = "A mock for the ScyllaDB Python driver for testing purposes."
 readme = "README.md"
-requires-python = ">=3.6,<=3.11"
+requires-python = ">=3.8,<3.12"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.6",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -25,3 +23,6 @@ dependencies = ["scylla-driver"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0.1", "ruff>=0.0.17"]
+
+[tool.ruff]
+line-length = 80
