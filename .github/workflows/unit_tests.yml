@@ -41,4 +41,4 @@ jobs:
         uses: astral-sh/ruff-action@v3
 
       - name: Run Tests
-        run: uv run --frozen pytest tests -vv
+        run: uv run --frozen --all-extras pytest tests -vv
