@@ -5,7 +5,6 @@ from mockylla import mock_scylladb
 
 @mock_scylladb
 def test_select_with_in_clause():
-    # Arrange
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
     keyspace_name = "my_keyspace"
@@ -18,7 +17,6 @@ def test_select_with_in_clause():
         f"CREATE TABLE {table_name} (id UUID PRIMARY KEY, name TEXT, age INT)"
     )
 
-    # Act
     session.execute(
         f"INSERT INTO {table_name} (id, name, age) VALUES (uuid(), 'Alice', 30)"
     )
@@ -29,7 +27,6 @@ def test_select_with_in_clause():
         f"INSERT INTO {table_name} (id, name, age) VALUES (uuid(), 'Charlie', 50)"
     )
 
-    # Assert
     rows = session.execute(
         f"SELECT * FROM {table_name} WHERE name IN ('Alice', 'Charlie')"
     )
@@ -39,7 +36,5 @@ def test_select_with_in_clause():
     assert len(list(rows)) == 1
     assert list(rows)[0]["name"] == "Bob"
 
-    rows = session.execute(
-        f"SELECT * FROM {table_name} WHERE name IN ('David')"
-    )
+    rows = session.execute(f"SELECT * FROM {table_name} WHERE name IN ('David')")
     assert len(list(rows)) == 0

@@ -5,7 +5,6 @@ from mockylla import mock_scylladb, get_table_rows
 
 @mock_scylladb
 def test_truncate_table():
-    # Arrange
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
     keyspace_name = "my_keyspace"
@@ -16,19 +15,14 @@ def test_truncate_table():
         "WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}"
     )
     session.set_keyspace(keyspace_name)
-    session.execute(
-        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
-    )
+    session.execute(f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)")
     session.execute(f"INSERT INTO {table_name} (id, name) VALUES (1, 'one')")
     session.execute(f"INSERT INTO {table_name} (id, name) VALUES (2, 'two')")
 
-    # Assert that data is present before truncating
     rows_before = get_table_rows(keyspace_name, table_name)
     assert len(rows_before) == 2
 
-    # Act
     session.execute(f"TRUNCATE TABLE {table_name}")
 
-    # Assert
     rows_after = get_table_rows(keyspace_name, table_name)
     assert len(rows_after) == 0

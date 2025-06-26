@@ -37,7 +37,6 @@ def handle_create_keyspace(create_keyspace_match, state):
 def handle_create_table(create_table_match, session, state):
     table_name_full, columns_str = create_table_match.groups()
 
-    # Determine keyspace and table name
     if "." in table_name_full:
         keyspace_name, table_name = table_name_full.split(".", 1)
     elif session.keyspace:
@@ -54,22 +53,15 @@ def handle_create_table(create_table_match, session, state):
         )
 
     primary_key = []
-    # A more robust column parser that handles inline and separate PRIMARY KEY definitions.
-
-    # First, find and store the PRIMARY KEY definition.
-    pk_match = re.search(
-        r"PRIMARY\s+KEY\s*\((.*?)\)", columns_str, re.IGNORECASE
-    )
+    pk_match = re.search(r"PRIMARY\s+KEY\s*\((.*?)\)", columns_str, re.IGNORECASE)
     if pk_match:
         pk_def = pk_match.group(1)
-        # Handle cases like ((col1, col2), col3) - we'll just get all column names
+
         pk_columns_str = pk_def.replace("(", "").replace(")", "")
         pk_cols = [c.strip() for c in pk_columns_str.split(",") if c.strip()]
         primary_key.extend(pk_cols)
-        # Remove it from the main string to not confuse column parsing
-        columns_str = (
-            columns_str[: pk_match.start()] + columns_str[pk_match.end() :]
-        )
+
+        columns_str = columns_str[: pk_match.start()] + columns_str[pk_match.end() :]
 
     column_defs = _parse_column_defs(columns_str)
 
@@ -78,13 +70,11 @@ def handle_create_table(create_table_match, session, state):
         parts = c.split(None, 1)
         if len(parts) == 2:
             name, type_ = parts
-            # Further strip any inline PRIMARY KEY declarations
+
             if "PRIMARY KEY" in type_.upper():
                 if name not in primary_key:
                     primary_key.append(name)
-            type_ = re.sub(
-                r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE
-            ).strip()
+            type_ = re.sub(r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE).strip()
             columns.append((name, type_))
 
     schema = {name: type_ for name, type_ in columns if name}

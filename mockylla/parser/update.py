@@ -16,17 +16,12 @@ def handle_update(update_match, session, state):
         if_exists,
     ) = update_match.groups()
 
-    # Get table info
     _, table_name, table = get_table(table_name_full, session, state)
     schema = table["schema"]
 
-    # Parse SET and WHERE clauses
-    set_operations, counter_operations = __parse_set_clause(
-        set_clause_str, schema
-    )
+    set_operations, counter_operations = __parse_set_clause(set_clause_str, schema)
     parsed_conditions = parse_where_clause(where_clause_str, schema)
 
-    # Update existing rows
     rows_updated = __update_existing_rows(
         table, parsed_conditions, set_operations, counter_operations
     )
@@ -42,7 +37,6 @@ def handle_update(update_match, session, state):
         print(f"Updated {rows_updated} rows in '{table_name}'")
         return []
 
-    # Handle upsert case for non-LWT
     __handle_upsert(
         table, table_name, parsed_conditions, set_operations, counter_operations
     )
@@ -56,7 +50,6 @@ def __parse_set_clause(set_clause_str, schema):
     set_pairs = [s.strip() for s in set_clause_str.split(",")]
 
     for pair in set_pairs:
-        # Check for counter update: `c = c + 1`
         counter_match = re.match(
             r"(\w+)\s*=\s*\1\s*([+-])\s*(\d+)", pair, re.IGNORECASE
         )
@@ -67,9 +60,8 @@ def __parse_set_clause(set_clause_str, schema):
                 val = -val
             counter_operations[col] = val
         else:
-            # Regular set: `col = value`
             col, val_str = [p.strip() for p in pair.split("=", 1)]
-            val = val_str.strip("'\"")  # Basic string literal parsing
+            val = val_str.strip("'\"")
             cql_type = schema.get(col)
             if cql_type:
                 set_operations[col] = cast_value(val, cql_type)

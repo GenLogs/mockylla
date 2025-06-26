@@ -5,7 +5,6 @@ from mockylla import mock_scylladb, get_table_rows
 
 @mock_scylladb
 def test_update_with_where_clause():
-    # Arrange
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
     keyspace_name = "my_keyspace"
@@ -19,7 +18,6 @@ def test_update_with_where_clause():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text, city text)"
     )
 
-    # Insert some data
     session.execute(
         f"INSERT INTO {table_name} (id, name, city) VALUES (1, 'Alice', 'New York')"
     )
@@ -30,16 +28,13 @@ def test_update_with_where_clause():
         f"INSERT INTO {table_name} (id, name, city) VALUES (3, 'Alice', 'Los Angeles')"
     )
 
-    # Act
     session.execute(
         f"UPDATE {table_name} SET city = 'San Francisco' WHERE name = 'Alice' AND city = 'Los Angeles'"
     )
 
-    # Assert
     all_rows = get_table_rows(keyspace_name, table_name)
     assert len(all_rows) == 3
 
-    # Find the updated row
     updated_row = None
     for row in all_rows:
         if row["id"] == 3:
@@ -55,7 +50,7 @@ def test_update_if_exists():
     """
     Tests the IF EXISTS clause for UPDATE statements.
     """
-    # Arrange
+
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
     keyspace_name = "my_keyspace"
@@ -72,21 +67,15 @@ def test_update_if_exists():
         f"INSERT INTO {table_name} (id, name, value) VALUES (1, 'Alice', 10)"
     )
 
-    # Act & Assert: Update on existing row should succeed
-    update_success_query = (
-        f"UPDATE {table_name} SET value = 20 WHERE id = 1 IF EXISTS"
-    )
+    update_success_query = f"UPDATE {table_name} SET value = 20 WHERE id = 1 IF EXISTS"
     result_success = session.execute(update_success_query)
     assert result_success.one()["[applied]"] is True
     rows = get_table_rows(keyspace_name, table_name)
     assert len(rows) == 1
     assert rows[0]["value"] == 20
 
-    # Act & Assert: Update on non-existent row should fail
-    update_fail_query = (
-        f"UPDATE {table_name} SET value = 30 WHERE id = 2 IF EXISTS"
-    )
+    update_fail_query = f"UPDATE {table_name} SET value = 30 WHERE id = 2 IF EXISTS"
     result_fail = session.execute(update_fail_query)
     assert result_fail.one()["[applied]"] is False
     assert len(get_table_rows(keyspace_name, table_name)) == 1
-    assert rows[0]["value"] == 20  # Unchanged
+    assert rows[0]["value"] == 20

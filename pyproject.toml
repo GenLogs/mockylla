@@ -24,4 +24,7 @@ classifiers = [
 dependencies = ["scylla-driver"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.4.1"]
+dev = [
+    "pytest>=7.0.1",
+    "ruff>=0.0.17",
+]

@@ -95,18 +95,13 @@ class DataStorage:
 class TestExistingCode(unittest.TestCase):
     @mock_scylladb
     def test_repository_can_connect_and_operate(self):
-        # This will test that the mock is correctly applied
-        # and the repository can connect without a real DB.
         repo = DataStorage()
         self.assertIsNotNone(repo.session)
 
-        # The repository will connect to the keyspace from the config,
-        # which is 'my_keyspace' by default. Let's create it.
         repo.session.execute(
             "CREATE KEYSPACE IF NOT EXISTS my_keyspace WITH REPLICATION = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 };"
         )
 
-        # Create the data_storage table to match the repository's structure
         repo.session.execute("""
             CREATE TABLE my_keyspace.data_storage (
                 id text PRIMARY KEY,
@@ -114,7 +109,6 @@ class TestExistingCode(unittest.TestCase):
             );
         """)
 
-        # Create counter table
         repo.session.execute("""
             CREATE TABLE my_keyspace.counter_table (
                 id text PRIMARY KEY,
@@ -122,7 +116,6 @@ class TestExistingCode(unittest.TestCase):
             );
         """)
 
-        # Test inserting and retrieving data
         repo.session.execute("""
             INSERT INTO my_keyspace.data_storage (id, json_payload)
             VALUES ('1', '{"key": "value"}');
@@ -130,15 +123,13 @@ class TestExistingCode(unittest.TestCase):
 
         data = repo.get_data()
         self.assertEqual(len(data), 1)
-        self.assertEqual(data[0][0], "1")  # event_id
-        self.assertEqual(data[0][1], '{"key": "value"}')  # json_payload
+        self.assertEqual(data[0][0], "1")
+        self.assertEqual(data[0][1], '{"key": "value"}')
 
-        # Test delete operation
         repo.delete_data("1")
         data = repo.get_data()
         self.assertEqual(len(data), 0)
 
-        # Test counter operations
         repo.session.execute("""
             UPDATE my_keyspace.counter_table SET c = c + 5 WHERE id = '1';
         """)

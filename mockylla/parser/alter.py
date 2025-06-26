@@ -26,10 +26,9 @@ def handle_alter_table(match, session, state):
             info=None,
         )
 
-    # Add the new column to the table's schema
-    state.keyspaces[keyspace_name]["tables"][table_name]["schema"][
-        new_column_name
-    ] = new_column_type
+    state.keyspaces[keyspace_name]["tables"][table_name]["schema"][new_column_name] = (
+        new_column_type
+    )
     print(
         f"Altered table '{table_name}' in keyspace '{keyspace_name}': "
         f"added column '{new_column_name} {new_column_type}'"

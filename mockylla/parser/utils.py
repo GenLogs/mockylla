@@ -30,9 +30,7 @@ def get_keyspace_and_name(name_full, session_keyspace):
 
 def get_table(table_name_full, session, state):
     """Get keyspace, table name and table data from state."""
-    keyspace_name, table_name = get_keyspace_and_name(
-        table_name_full, session.keyspace
-    )
+    keyspace_name, table_name = get_keyspace_and_name(table_name_full, session.keyspace)
 
     if (
         keyspace_name not in state.keyspaces
@@ -51,9 +49,7 @@ def parse_where_clause(where_clause_str, schema):
 
     conditions = [
         cond.strip()
-        for cond in re.split(
-            r"\s+AND\s+", where_clause_str, flags=re.IGNORECASE
-        )
+        for cond in re.split(r"\s+AND\s+", where_clause_str, flags=re.IGNORECASE)
     ]
 
     return __parse_conditions(conditions, schema)
@@ -63,9 +59,7 @@ def __parse_conditions(conditions, schema):
     """Parse conditions into structured format."""
     parsed_conditions = []
     for cond in conditions:
-        in_match = re.match(
-            r"(\w+)\s+IN\s+\((.*)\)", cond.strip(), re.IGNORECASE
-        )
+        in_match = re.match(r"(\w+)\s+IN\s+\((.*)\)", cond.strip(), re.IGNORECASE)
         if in_match:
             parsed_conditions.append(__parse_in_condition(in_match, schema))
             continue
@@ -75,9 +69,7 @@ def __parse_conditions(conditions, schema):
             cond.strip(),
         )
         if match:
-            parsed_conditions.append(
-                __parse_comparison_condition(match, schema)
-            )
+            parsed_conditions.append(__parse_comparison_condition(match, schema))
     return parsed_conditions
 
 

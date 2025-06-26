@@ -6,9 +6,7 @@ def handle_create_type(match, session, state):
     Handles a CREATE TYPE statement.
     """
     type_name_str, fields_str = match.groups()
-    keyspace_name, type_name = get_keyspace_and_name(
-        type_name_str, session.keyspace
-    )
+    keyspace_name, type_name = get_keyspace_and_name(type_name_str, session.keyspace)
 
     if keyspace_name not in state.keyspaces:
         raise Exception(f"Keyspace '{keyspace_name}' does not exist")
@@ -17,11 +15,8 @@ def handle_create_type(match, session, state):
         state.keyspaces[keyspace_name]["types"] = {}
 
     if type_name in state.keyspaces[keyspace_name]["types"]:
-        # Here we should ideally check for IF NOT EXISTS
-        # For now, we'll just skip if it already exists.
         return
 
-    # Parse fields
     field_defs = [f.strip() for f in fields_str.split(",") if f.strip()]
     fields = {}
     for f in field_defs:

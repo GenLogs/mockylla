@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from mockylla.parser import handle_query
 
-# This is the path to the Connection factory in the scylla-driver
+
 CONNECTION_FACTORY_PATH = "cassandra.connection.Connection.factory"
 
 
@@ -40,28 +40,33 @@ class ScyllaState:
         self.__init__()
 
 
-# Global instance of our mock state
 _global_state = None
 
 
 class MockScyllaDB:
     def __init__(self):
-        # We patch the connection factory to prevent real connections
         self.patcher = patch(CONNECTION_FACTORY_PATH)
         self.state = ScyllaState()
 
     def __enter__(self):
-        # Reset the state for each test
         self.state.reset()
         _set_global_state(self.state)
 
-        # When patching starts, any attempt to connect will be blocked
         self.patcher.start()
 
-        # We also need to patch the Cluster's connect method to return our MockSession.
-        # The new function needs to accept the cluster instance as its first argument.
-        def mock_cluster_connect(cluster_self, keyspace=None):
-            """A mock replacement for Cluster.connect() that correctly handles the instance."""
+        def mock_cluster_connect(cluster_self, keyspace=None, *args, **kwargs):
+            """A mock replacement for Cluster.connect() that correctly handles the instance.
+
+            The real driver's ``Cluster.connect`` method signature can vary between
+            releases (it may include parameters such as ``wait_for_all_pools`` or
+            ``execution_profile``). Accepting *args and **kwargs makes the mock
+            resilient to such changes while still focusing on the *keyspace*
+            argument that we care about.
+            """
+
+            if keyspace is None and args:
+                keyspace = args[0]
+
             print(f"MockCluster connect called for keyspace: {keyspace}")
             return MockSession(keyspace=keyspace, state=self.state)
 
@@ -89,7 +94,6 @@ def mock_scylladb(func):
     return wrapper
 
 
-# This class is no longer used for patching but could be useful later.
 class MockCluster:
     pass
 
@@ -97,9 +101,7 @@ class MockCluster:
 class MockSession:
     def __init__(self, keyspace=None, state=None):
         if state is None:
-            raise ValueError(
-                "MockSession must be initialized with a state object."
-            )
+            raise ValueError("MockSession must be initialized with a state object.")
         self.keyspace = keyspace
         self.state = state
         print(f"Set keyspace to: {keyspace}")
@@ -111,13 +113,27 @@ class MockSession:
         self.keyspace = keyspace
         print(f"Set keyspace to: {keyspace}")
 
-    def execute(self, query, parameters=None):
-        print(f"MockSession execute called with query: {query}")
-        # Pass parameters directly to the handler
+    def execute(
+        self,
+        query,
+        parameters=None,
+        execution_profile=None,
+        **kwargs,
+    ):
+        """Executes a CQL query against the in-memory mock.
+
+        Only *query* and *parameters* are used by the mock implementation. All
+        additional keyword arguments (such as *execution_profile*, *timeout*,
+        etc.) are accepted for compatibility with the real ScyllaDB/DataStax
+        driver but are currently ignored.
+        """
+
+        print(
+            f"MockSession execute called with query: {query}; "
+            f"execution_profile={execution_profile}"
+        )
+
         return handle_query(query, self, self.state, parameters=parameters)
-
-
-# --- Public API for test inspection ---
 
 
 def _set_global_state(state):
@@ -138,9 +154,7 @@ def get_tables(keyspace_name):
     if _global_state is None:
         raise Exception("Mock is not active.")
     if keyspace_name not in _global_state.keyspaces:
-        raise Exception(
-            f"Keyspace '{keyspace_name}' does not exist in mock state."
-        )
+        raise Exception(f"Keyspace '{keyspace_name}' does not exist in mock state.")
     return _global_state.keyspaces[keyspace_name]["tables"]
 
 
@@ -159,7 +173,5 @@ def get_types(keyspace_name):
     if _global_state is None:
         raise Exception("Mock is not active.")
     if keyspace_name not in _global_state.keyspaces:
-        raise Exception(
-            f"Keyspace '{keyspace_name}' does not exist in mock state."
-        )
+        raise Exception(f"Keyspace '{keyspace_name}' does not exist in mock state.")
     return _global_state.keyspaces[keyspace_name].get("types", {})

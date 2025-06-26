@@ -3,7 +3,6 @@ from mockylla.row import Row
 
 
 def handle_select_from(select_match, session, state):
-    # Parse query components
     (
         columns_str,
         table_name_full,
@@ -12,25 +11,18 @@ def handle_select_from(select_match, session, state):
         limit_str,
     ) = select_match.groups()
 
-    # Get table info
     _, table_name, table_info = get_table(table_name_full, session, state)
     table_data = table_info["data"]
     schema = table_info["schema"]
 
-    # Apply filters and get result set
     filtered_data = __apply_where_filters(table_data, where_clause_str, schema)
 
-    # Apply ordering if specified
     if order_by_clause_str:
-        filtered_data = __apply_order_by(
-            filtered_data, order_by_clause_str, schema
-        )
+        filtered_data = __apply_order_by(filtered_data, order_by_clause_str, schema)
 
-    # Apply limit if specified
     if limit_str:
         filtered_data = __apply_limit(filtered_data, limit_str)
 
-    # Select requested columns
     result_set = __select_columns(filtered_data, columns_str, schema)
 
     print(f"Selected {len(result_set)} rows from '{table_name}'")
@@ -43,11 +35,7 @@ def __apply_where_filters(table_data, where_clause_str, schema):
         return list(table_data)
 
     parsed_conditions = parse_where_clause(where_clause_str, schema)
-    return [
-        row
-        for row in table_data
-        if check_row_conditions(row, parsed_conditions)
-    ]
+    return [row for row in table_data if check_row_conditions(row, parsed_conditions)]
 
 
 def __apply_order_by(filtered_data, order_by_clause_str, schema):
@@ -61,9 +49,7 @@ def __apply_order_by(filtered_data, order_by_clause_str, schema):
         raise Exception(f"Invalid ORDER BY direction: {order_dir}")
 
     if filtered_data and order_col not in schema:
-        raise Exception(
-            f"Column '{order_col}' in ORDER BY not found in table schema"
-        )
+        raise Exception(f"Column '{order_col}' in ORDER BY not found in table schema")
 
     return sorted(
         filtered_data,
@@ -87,10 +73,8 @@ def __select_columns(filtered_data, columns_str, schema):
     else:
         select_cols = [c.strip() for c in select_cols_str.split(",")]
 
-    # Create a list of Row objects
     result_set = []
     for row_dict in filtered_data:
-        # Ensure that the values are in the same order as select_cols
         values = [row_dict.get(col) for col in select_cols]
         result_set.append(Row(names=select_cols, values=values))
 

@@ -12,18 +12,15 @@ def test_counter_table_update():
     session.set_keyspace("test_keyspace")
     session.execute("CREATE TABLE counters (id int PRIMARY KEY, c counter)")
 
-    # Increment counter
     session.execute("UPDATE counters SET c = c + 1 WHERE id = 1")
     rows = session.execute("SELECT * FROM counters WHERE id = 1")
     assert len(rows) == 1
     assert rows[0]["c"] == 1
 
-    # Increment again
     session.execute("UPDATE counters SET c = c + 1 WHERE id = 1")
     rows = session.execute("SELECT * FROM counters WHERE id = 1")
     assert rows[0]["c"] == 2
 
-    # Decrement counter
     session.execute("UPDATE counters SET c = c - 10 WHERE id = 1")
     rows = session.execute("SELECT * FROM counters WHERE id = 1")
     assert rows[0]["c"] == -8

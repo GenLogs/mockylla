@@ -8,11 +8,11 @@ def _parse_udt_literal(literal):
     if isinstance(literal, dict):
         return literal
     if not literal.startswith("{") or not literal.endswith("}"):
-        return literal  # Not a UDT literal
+        return literal
 
     content = literal[1:-1].strip()
     udt_dict = {}
-    # This regex handles simple key-value pairs, including quoted values.
+
     for match in re.finditer(r"(\w+)\s*:\s*(?:'([^']*)'|([^,}\s]+))", content):
         key, val_quoted, val_unquoted = match.groups()
         val = val_quoted if val_quoted is not None else val_unquoted
@@ -55,7 +55,6 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         if_not_exists,
     ) = insert_match.groups()
 
-    # Determine keyspace and table name
     if "." in table_name_full:
         keyspace_name, table_name = table_name_full.split(".", 1)
     elif session.keyspace:
@@ -88,44 +87,33 @@ def handle_insert_into(insert_match, session, state, parameters=None):
     for col, val in zip(columns, values):
         cql_type = table_schema.get(col)
         if cql_type in defined_types:
-            # It's a UDT
             if isinstance(val, str):
                 row_data[col] = _parse_udt_literal(val)
             else:
                 row_data[col] = cast_value(val, cql_type)
         elif cql_type:
-            # It's a standard type
             if isinstance(val, str):
                 row_data[col] = cast_value(val.strip("'\""), cql_type)
             else:
                 row_data[col] = cast_value(val, cql_type)
         else:
-            row_data[col] = val  # Fallback for unknown columns
+            row_data[col] = val
 
     if if_not_exists:
-        # LWT path
-        pk_to_insert = {
-            k: v for k, v in row_data.items() if k in primary_key_cols
-        }
+        pk_to_insert = {k: v for k, v in row_data.items() if k in primary_key_cols}
 
         for existing_row in table_info["data"]:
             pk_existing = {
                 k: v for k, v in existing_row.items() if k in primary_key_cols
             }
             if pk_to_insert == pk_existing:
-                # Row exists, operation not applied
                 result_names = ["[applied]"] + list(existing_row.keys())
                 result_values = [False] + list(existing_row.values())
                 return [Row(result_names, result_values)]
 
-        # Row does not exist, apply the insert
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
-            row_data
-        )
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(row_data)
         return [Row(["[applied]"], [True])]
     else:
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
-            row_data
-        )
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(row_data)
         print(f"Inserted row into '{table_name}': {row_data}")
         return []

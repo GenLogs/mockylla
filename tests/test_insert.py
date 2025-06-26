@@ -7,13 +7,12 @@ def test_insert_into_table():
     """
     Tests that data can be inserted into a table and then retrieved.
     """
-    # Arrange
+
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
     keyspace_name = "my_app"
     table_name = "users"
 
-    # Setup keyspace and table
     session.execute(
         f"CREATE KEYSPACE {keyspace_name} "
         "WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}"
@@ -27,11 +26,9 @@ def test_insert_into_table():
         )
     """)
 
-    # Act
     insert_query = f"INSERT INTO {table_name} (user_id, name, email) VALUES (1, 'John Doe', 'john.doe@example.com')"
     session.execute(insert_query)
 
-    # Assert
     rows = get_table_rows(keyspace_name, table_name)
 
     assert len(rows) == 1
@@ -47,13 +44,12 @@ def test_insert_if_not_exists():
     """
     Tests the IF NOT EXISTS clause for INSERT statements.
     """
-    # Arrange
+
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
     keyspace_name = "my_app"
     table_name = "users"
 
-    # Setup keyspace and table
     session.execute(
         f"CREATE KEYSPACE {keyspace_name} "
         "WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}"
@@ -67,20 +63,17 @@ def test_insert_if_not_exists():
         )
     """)
 
-    # Act & Assert: Initial insert should succeed
     insert_query = f"INSERT INTO {table_name} (user_id, name, email) VALUES (1, 'John Doe', 'john.doe@example.com')"
     session.execute(insert_query)
     assert len(get_table_rows(keyspace_name, table_name)) == 1
 
-    # Act & Assert: Re-inserting the same PK with IF NOT EXISTS should fail
     lwt_query_fail = f"{insert_query} IF NOT EXISTS"
     result_fail = session.execute(lwt_query_fail)
     assert result_fail.one()["[applied]"] is False
     assert len(get_table_rows(keyspace_name, table_name)) == 1
-    # Check that the returned row is the existing one
+
     assert result_fail.one()["user_id"] == 1
 
-    # Act & Assert: Inserting a new PK with IF NOT EXISTS should succeed
     lwt_query_success = f"INSERT INTO {table_name} (user_id, name, email) VALUES (2, 'Jane Doe', 'jane.doe@example.com') IF NOT EXISTS"
     result_success = session.execute(lwt_query_success)
     assert result_success.one()["[applied]"] is True

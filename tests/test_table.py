@@ -7,7 +7,7 @@ def test_create_table():
     """
     Tests that a table can be created within a keyspace and inspected.
     """
-    # Arrange
+
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
     keyspace_name = "my_app"
@@ -18,10 +18,8 @@ def test_create_table():
         "WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}"
     )
 
-    # Set the keyspace for the session
     session.set_keyspace(keyspace_name)
 
-    # Act
     session.execute(f"""
         CREATE TABLE {table_name} (
             user_id int PRIMARY KEY,
@@ -30,11 +28,9 @@ def test_create_table():
         )
     """)
 
-    # Assert
     tables_in_keyspace = get_tables(keyspace_name)
     assert table_name in tables_in_keyspace
 
-    # Verify the schema was parsed correctly
     schema = tables_in_keyspace[table_name]["schema"]
     assert schema["user_id"] == "int"
     assert schema["name"] == "text"
