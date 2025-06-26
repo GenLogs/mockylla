@@ -25,7 +25,7 @@ A lightweight, in-memory mock for the ScyllaDB **Python** driver.
 pip install mockylla
 ```
 
-`mockylla` supports **Python 3.6 → 3.11** and is continuously tested against the latest **scylla-driver** release.
+`mockylla` supports **Python 3.8 → 3.11** and is continuously tested against the latest **scylla-driver** release.
 
 ---
 
