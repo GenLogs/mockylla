@@ -1,0 +1,62 @@
+name: Build & Publish Python 🐍 distributions 📦 to PyPI
+
+on:
+  push:
+    tags:
+      - '*'
+
+# Allow uv to install into the system environment without creating a venv
+env:
+  UV_SYSTEM_PYTHON: 1
+
+jobs:
+  build:
+    name: Build distributions (Py${{ matrix.python-version }} • ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest, macos-14]
+        python-version: ['3.6', '3.7', '3.8', '3.9', '3.10', '3.11']
+        exclude:
+          # Python <3.8 isn't available on macOS-14 yet (adjust when supported)
+          - os: macos-14
+            python-version: '3.6'
+          - os: macos-14
+            python-version: '3.7'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv & Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Build source & wheel distributions using uv
+        run: uv build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: dist/*
+
+  publish:
+    name: Publish distribution 📦 to PyPI
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mockylla
+    permissions:
+      id-token: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./dist
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.12.4
