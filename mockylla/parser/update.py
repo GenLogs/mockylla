@@ -7,7 +7,7 @@ from mockylla.parser.utils import (
 from mockylla.row import Row
 
 
-def handle_update(update_match, session, state):
+def handle_update(update_match, session, state, parameters=None):
     """Handle UPDATE query by parsing and executing the update operation."""
     (
         table_name_full,
@@ -15,6 +15,36 @@ def handle_update(update_match, session, state):
         where_clause_str,
         if_exists,
     ) = update_match.groups()
+
+    if parameters and "%s" in (set_clause_str + where_clause_str):
+
+        def _replace_placeholders(segment, params, start_idx):
+            if not segment or "%s" not in segment:
+                return segment, start_idx
+
+            parts = segment.split("%s")
+            if len(parts) - 1 + start_idx > len(params):
+                raise ValueError(
+                    "Number of parameters does not match number of placeholders in UPDATE query"
+                )
+
+            new_segment = parts[0]
+            idx = start_idx
+            for i in range(len(parts) - 1):
+                param = params[idx]
+                param_str = (
+                    f"'{param}'" if isinstance(param, str) else str(param)
+                )
+                new_segment += param_str + parts[i + 1]
+                idx += 1
+            return new_segment, idx
+
+        set_clause_str, next_idx = _replace_placeholders(
+            set_clause_str, parameters, 0
+        )
+        where_clause_str, _ = _replace_placeholders(
+            where_clause_str, parameters, next_idx
+        )
 
     _, table_name, table = get_table(table_name_full, session, state)
     schema = table["schema"]
