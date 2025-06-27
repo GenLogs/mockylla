@@ -1,4 +1,5 @@
 import re
+import uuid
 
 
 def cast_value(value, cql_type):
@@ -9,6 +10,24 @@ def cast_value(value, cql_type):
         return int(value)
     if cql_type in ("text", "varchar"):
         return str(value)
+
+    if cql_type in ("uuid", "timeuuid"):
+        if isinstance(value, uuid.UUID):
+            return value
+
+        if isinstance(value, str):
+            value = value.strip()
+
+            if (value.startswith("'") and value.endswith("'")) or (
+                value.startswith('"') and value.endswith('"')
+            ):
+                value = value[1:-1]
+
+            try:
+                return uuid.UUID(value)
+            except (ValueError, AttributeError):
+                return value
+
     return value
 
 

@@ -2,7 +2,7 @@ from .utils import get_table, parse_where_clause, check_row_conditions
 from mockylla.row import Row
 
 
-def handle_select_from(select_match, session, state):
+def handle_select_from(select_match, session, state, parameters=None):
     (
         columns_str,
         table_name_full,
@@ -10,6 +10,20 @@ def handle_select_from(select_match, session, state):
         order_by_clause_str,
         limit_str,
     ) = select_match.groups()
+
+    if parameters and where_clause_str and "%s" in where_clause_str:
+        query_parts = where_clause_str.split("%s")
+        if len(query_parts) - 1 != len(parameters):
+            raise ValueError(
+                "Number of parameters does not match number of placeholders in WHERE clause"
+            )
+
+        final_where = query_parts[0]
+        for i, param in enumerate(parameters):
+            param_str = f"'{param}'" if isinstance(param, str) else str(param)
+            final_where += param_str + query_parts[i + 1]
+
+        where_clause_str = final_where
 
     _, table_name, table_info = get_table(table_name_full, session, state)
     table_data = table_info["data"]

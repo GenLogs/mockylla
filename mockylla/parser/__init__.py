@@ -81,7 +81,9 @@ def handle_query(query, session, state, parameters=None):
         re.IGNORECASE | re.DOTALL,
     )
     if select_match:
-        rows = handle_select_from(select_match, session, state)
+        rows = handle_select_from(
+            select_match, session, state, parameters=parameters
+        )
         return ResultSet(rows)
 
     update_match = re.match(
@@ -90,7 +92,9 @@ def handle_query(query, session, state, parameters=None):
         re.IGNORECASE | re.DOTALL,
     )
     if update_match:
-        result = handle_update(update_match, session, state)
+        result = handle_update(
+            update_match, session, state, parameters=parameters
+        )
         return ResultSet(result)
 
     delete_match = re.match(
