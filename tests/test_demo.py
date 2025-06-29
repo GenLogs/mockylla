@@ -13,8 +13,6 @@ def test_demo():
     s.execute("INSERT INTO t (id, v) VALUES (1,'A')")
     s.execute("INSERT INTO t (id, v) VALUES (2,'B')")
 
-    # statement ending with semicolon
     s.execute("DELETE FROM t WHERE id = 2;")
     rows = list(s.execute("SELECT * FROM t;"))
     assert len(rows) == 1 and rows[0]["id"] == 1
-    print("semicolon-safe ✅")
