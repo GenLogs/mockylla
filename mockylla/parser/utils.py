@@ -63,6 +63,8 @@ def get_table(table_name_full, session, state):
 
 def parse_where_clause(where_clause_str, schema):
     """Parse WHERE clause conditions into structured format."""
+    where_clause_str = where_clause_str.rstrip(";")
+
     if not where_clause_str:
         return []
 
