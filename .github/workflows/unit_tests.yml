@@ -9,9 +9,12 @@ on:
 permissions:
     contents: write
 
+env:
+  PYTHONUTF8: 1
+
 jobs:
-  build:
-    name: Build distributions (Py${{ matrix.python-version }} • ${{ matrix.os }})
+  unit-tests:
+    name: Unit testing (Py${{ matrix.python-version }} • ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,6 +32,9 @@ jobs:
 
       - name: Check files format
         uses: astral-sh/ruff-action@v3
+
+      - name: Check cognitive complexity
+        run: uv run --frozen --all-extras complexipy mockylla -d low
 
       - name: Run Tests
         run: uv run --frozen --all-extras pytest tests -vv
