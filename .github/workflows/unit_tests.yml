@@ -9,9 +9,12 @@ on:
 permissions:
     contents: write
 
+env:
+  PYTHONUTF8: 1
+
 jobs:
-  build:
-    name: Build distributions (Py${{ matrix.python-version }} • ${{ matrix.os }})
+  unit-tests:
+    name: Unit testing (Py${{ matrix.python-version }} • ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
