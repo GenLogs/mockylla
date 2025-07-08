@@ -10,13 +10,65 @@ env:
   UV_SYSTEM_PYTHON: 1
 
 jobs:
-  build:
+  build-ubuntu:
+    name: Build distributions - Ubuntu (Py${{ matrix.python-version }} • ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04]
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv & Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Build source & wheel distributions using uv
+        run: uv build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: dist/*
+
+  build-windows:
     name: Build distributions (Py${{ matrix.python-version }} • ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest, macos-14]
+        os: [windows-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv & Python ${{ matrix.python-version }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Build source & wheel distributions using uv
+        run: uv build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: dist/*
+
+  build-macos:
+    name: Build distributions (Py${{ matrix.python-version }} • ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, macos-15, macos-13]
         python-version: ['3.8', '3.9', '3.10', '3.11']
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +91,7 @@ jobs:
   publish:
     name: Publish distribution 📦 to PyPI
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build-ubuntu, build-windows, build-macos]
     environment:
       name: pypi
       url: https://pypi.org/p/mockylla
