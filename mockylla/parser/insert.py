@@ -47,6 +47,21 @@ def _parse_values(values_str):
     return values
 
 
+def assign_row_data_value(val, cql_type, defined_types):
+    if cql_type in defined_types:
+        if isinstance(val, str):
+            return _parse_udt_literal(val)
+        else:
+            return cast_value(val, cql_type)
+    elif cql_type:
+        if isinstance(val, str):
+            return cast_value(val.strip("'\""), cql_type)
+        else:
+            return cast_value(val, cql_type)
+    else:
+        return val
+
+
 def handle_insert_into(insert_match, session, state, parameters=None):
     (
         table_name_full,
@@ -86,18 +101,7 @@ def handle_insert_into(insert_match, session, state, parameters=None):
     row_data = {}
     for col, val in zip(columns, values):
         cql_type = table_schema.get(col)
-        if cql_type in defined_types:
-            if isinstance(val, str):
-                row_data[col] = _parse_udt_literal(val)
-            else:
-                row_data[col] = cast_value(val, cql_type)
-        elif cql_type:
-            if isinstance(val, str):
-                row_data[col] = cast_value(val.strip("'\""), cql_type)
-            else:
-                row_data[col] = cast_value(val, cql_type)
-        else:
-            row_data[col] = val
+        row_data[col] = assign_row_data_value(val, cql_type, defined_types)
 
     if if_not_exists:
         pk_to_insert = {
