@@ -21,7 +21,9 @@ class ResultSet(Sequence):
     ):
         self._all_rows = list(rows or [])
         self._position = 0
-        self._column_names = tuple(column_names) if column_names else self._infer_column_names()
+        self._column_names = (
+            tuple(column_names) if column_names else self._infer_column_names()
+        )
         self._column_types = column_types or {}
         self._paging_state = paging_state
         self._has_more_pages = has_more_pages
@@ -82,7 +84,7 @@ class ResultSet(Sequence):
 
     @property
     def current_rows(self):
-        return list(self._all_rows[self._position:])
+        return list(self._all_rows[self._position :])
 
     @property
     def has_more_pages(self):
@@ -127,7 +129,9 @@ class ResultSet(Sequence):
 
         first = self._all_rows[0]
         if isinstance(first, dict):
-            return bool(first.get("[applied]")) if "[applied]" in first else None
+            return (
+                bool(first.get("[applied]")) if "[applied]" in first else None
+            )
 
         try:
             applied = first["[applied]"]

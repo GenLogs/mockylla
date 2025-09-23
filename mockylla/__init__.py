@@ -219,7 +219,9 @@ class MockSession:
         """
 
         self._ensure_open()
-        query_string, bound_values = self._normalise_query_input(query, parameters)
+        query_string, bound_values = self._normalise_query_input(
+            query, parameters
+        )
 
         print(
             f"MockSession execute called with query: {query_string}; "
