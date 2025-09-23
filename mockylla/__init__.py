@@ -1,3 +1,5 @@
+import re
+from collections.abc import Mapping, Sequence
 from functools import wraps
 from unittest.mock import patch
 
@@ -68,7 +70,12 @@ class MockScyllaDB:
                 keyspace = args[0]
 
             print(f"MockCluster connect called for keyspace: {keyspace}")
-            return MockSession(keyspace=keyspace, state=self.state)
+            session = MockSession(
+                keyspace=keyspace,
+                state=self.state,
+                cluster=cluster_self,
+            )
+            return session
 
         self.cluster_connect_patcher = patch(
             "cassandra.cluster.Cluster.connect", new=mock_cluster_connect
@@ -94,6 +101,77 @@ def mock_scylladb(func):
     return wrapper
 
 
+class MockPreparedStatement:
+    """Minimal prepared statement representation."""
+
+    def __init__(self, query_string, session):
+        self._original_query = query_string
+        self._internal_query = _normalise_placeholders(query_string)
+        self.keyspace = session.keyspace
+        self.session = session
+
+    @property
+    def query_string(self):
+        return self._original_query
+
+    def bind(self, values=None):
+        return MockBoundStatement(self, values)
+
+
+class MockBoundStatement:
+    """Represents a prepared statement bound with positional values."""
+
+    def __init__(self, prepared_statement, values=None):
+        self.prepared_statement = prepared_statement
+        self._internal_query = prepared_statement._internal_query
+        self._values = _coerce_parameters(values)
+
+    @property
+    def values(self):
+        return self._values
+
+    @property
+    def query_string(self):
+        return self.prepared_statement.query_string
+
+
+class MockResponseFuture:
+    """Simple future-like wrapper for execute_async."""
+
+    def __init__(self, result):
+        self._result = result
+        self._cancelled = False
+
+    def result(self, timeout=None):  # noqa: ARG002 (parity with driver)
+        return self._result
+
+    def add_callbacks(self, callback=None, errback=None):
+        if callback:
+            callback(self._result)
+        return self
+
+    def add_callback(self, callback):
+        if callback:
+            callback(self._result)
+        return self
+
+    def add_errback(self, errback):
+        return self
+
+    def exception(self, timeout=None):  # noqa: ARG002
+        return None
+
+    def cancel(self):
+        self._cancelled = True
+        return False
+
+    def cancelled(self):
+        return self._cancelled
+
+    def done(self):
+        return True
+
+
 class MockCluster:
     """Placeholder for potential cluster-level behaviour."""
 
@@ -103,14 +181,18 @@ class MockCluster:
 
 
 class MockSession:
-    def __init__(self, keyspace=None, state=None):
+    def __init__(self, *, keyspace=None, state=None, cluster=None):
         if state is None:
             raise ValueError(
                 "MockSession must be initialized with a state object."
             )
         self.keyspace = keyspace
         self.state = state
+        self.cluster = cluster
+        self.row_factory = None
+        self.default_timeout = None
         self._is_shutdown = False
+        self._prepared_statements = []
         print(f"Set keyspace to: {keyspace}")
 
     def set_keyspace(self, keyspace):
@@ -137,12 +219,44 @@ class MockSession:
         """
 
         self._ensure_open()
+        query_string, bound_values = self._normalise_query_input(query, parameters)
+
         print(
-            f"MockSession execute called with query: {query}; "
+            f"MockSession execute called with query: {query_string}; "
             f"execution_profile={execution_profile}"
         )
 
-        return handle_query(query, self, self.state, parameters=parameters)
+        return self._run_query(
+            query_string,
+            bound_values,
+            execution_profile=execution_profile,
+            **kwargs,
+        )
+
+    def execute_async(
+        self,
+        query,
+        parameters=None,
+        execution_profile=None,
+        **kwargs,
+    ):
+        """Asynchronous execute analogue returning a future-like object."""
+
+        result = self.execute(
+            query,
+            parameters=parameters,
+            execution_profile=execution_profile,
+            **kwargs,
+        )
+        return MockResponseFuture(result)
+
+    def prepare(self, query):
+        """Prepare a CQL statement for later execution."""
+
+        self._ensure_open()
+        prepared = MockPreparedStatement(query, session=self)
+        self._prepared_statements.append(prepared)
+        return prepared
 
     def shutdown(self):
         """Release session resources and prevent further queries."""
@@ -163,6 +277,34 @@ class MockSession:
             raise RuntimeError(
                 "MockSession has been shut down; create a new session if needed."
             )
+
+    def _normalise_query_input(self, query, parameters):
+        if isinstance(query, MockBoundStatement):
+            return query._internal_query, query.values
+        if isinstance(query, MockPreparedStatement):
+            return query._internal_query, _coerce_parameters(parameters)
+        return query, parameters
+
+    def _run_query(self, query, parameters, **kwargs):
+        return handle_query(query, self, self.state, parameters=parameters)
+
+
+def _normalise_placeholders(query):
+    """Replace question-mark placeholders with %s for internal parsing."""
+
+    return re.sub(r"\?", "%s", query)
+
+
+def _coerce_parameters(values):
+    if values is None:
+        return None
+    if isinstance(values, MockBoundStatement):
+        return values.values
+    if isinstance(values, Mapping):
+        return tuple(values[key] for key in sorted(values.keys()))
+    if isinstance(values, Sequence) and not isinstance(values, (str, bytes)):
+        return tuple(values)
+    return (values,)
 
 
 def _set_global_state(state):
