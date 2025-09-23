@@ -114,6 +114,20 @@ def test_crud():
 
 ---
 
+## 🗂️ Package Structure
+
+The implementation now lives in the `mockylla/classes/` package, split into focused modules:
+
+- `state.py` – in-memory `ScyllaState` and helpers for inspecting tables, rows, and types.
+- `statements.py` – prepared/bound/batch statement shims plus placeholder utilities.
+- `session.py` – `MockSession`, `MockCluster`, and async response primitives.
+- `metadata.py` – lightweight metadata facades mirroring the driver objects.
+- `scylladb.py` – context manager + decorator that patch the driver and bootstrap state.
+
+The top-level `mockylla/__init__.py` re-exports the public API unchanged for consumers.
+
+---
+
 ## 📄 License
 
 `mockylla` is distributed under the [MIT](LICENSE) license.
