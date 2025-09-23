@@ -118,6 +118,22 @@ class ScyllaState:
         self._ensure_system_schema_structure()
 
         system_schema_tables = self.keyspaces["system_schema"]["tables"]
+
+        (
+            keyspaces_rows,
+            tables_rows,
+            columns_rows,
+            indexes_rows,
+            views_rows,
+        ) = self._collect_system_schema_rows()
+
+        system_schema_tables["keyspaces"]["data"] = keyspaces_rows
+        system_schema_tables["tables"]["data"] = tables_rows
+        system_schema_tables["columns"]["data"] = columns_rows
+        system_schema_tables["indexes"]["data"] = indexes_rows
+        system_schema_tables["views"]["data"] = views_rows
+
+    def _collect_system_schema_rows(self):
         keyspaces_rows = []
         tables_rows = []
         columns_rows = []
@@ -125,82 +141,121 @@ class ScyllaState:
         views_rows = []
 
         for keyspace_name, keyspace_info in self.keyspaces.items():
-            replication = {
-                str(k): str(v)
-                for k, v in keyspace_info.get("replication", {}).items()
-            }
-            if not replication:
-                replication = {
-                    "class": "SimpleStrategy",
-                    "replication_factor": "1",
-                }
-
             keyspaces_rows.append(
+                self._build_keyspace_row(keyspace_name, keyspace_info)
+            )
+            table_rows, column_rows, index_rows = self._build_table_rows(
+                keyspace_name, keyspace_info
+            )
+            tables_rows.extend(table_rows)
+            columns_rows.extend(column_rows)
+            indexes_rows.extend(index_rows)
+            views_rows.extend(
+                self._build_view_rows(keyspace_name, keyspace_info)
+            )
+
+        return (
+            keyspaces_rows,
+            tables_rows,
+            columns_rows,
+            indexes_rows,
+            views_rows,
+        )
+
+    def _build_keyspace_row(self, keyspace_name, keyspace_info):
+        replication = {
+            str(k): str(v)
+            for k, v in keyspace_info.get("replication", {}).items()
+        }
+        if not replication:
+            replication = {
+                "class": "SimpleStrategy",
+                "replication_factor": "1",
+            }
+
+        return {
+            "keyspace_name": keyspace_name,
+            "durable_writes": keyspace_info.get("durable_writes", True),
+            "replication": replication,
+        }
+
+    def _build_table_rows(self, keyspace_name, keyspace_info):
+        tables_rows = []
+        columns_rows = []
+        indexes_rows = []
+
+        for table_name, table_info in keyspace_info.get("tables", {}).items():
+            tables_rows.append(
                 {
                     "keyspace_name": keyspace_name,
-                    "durable_writes": keyspace_info.get("durable_writes", True),
-                    "replication": replication,
+                    "table_name": table_name,
+                }
+            )
+            columns_rows.extend(
+                self._build_column_rows(keyspace_name, table_name, table_info)
+            )
+            indexes_rows.extend(
+                self._build_index_rows(keyspace_name, table_name, table_info)
+            )
+
+        return tables_rows, columns_rows, indexes_rows
+
+    def _build_column_rows(self, keyspace_name, table_name, table_info):
+        schema = table_info.get("schema", {})
+        primary_key = table_info.get("primary_key", [])
+        partition_keys = primary_key[:1]
+        clustering_keys = primary_key[1:]
+
+        column_rows = []
+        for column_name, data_type in schema.items():
+            column_rows.append(
+                {
+                    "keyspace_name": keyspace_name,
+                    "table_name": table_name,
+                    "column_name": column_name,
+                    "kind": self._determine_column_kind(
+                        column_name, partition_keys, clustering_keys
+                    ),
+                    "type": data_type,
                 }
             )
 
-            tables = keyspace_info.get("tables", {})
-            for table_name, table_info in tables.items():
-                tables_rows.append(
-                    {
-                        "keyspace_name": keyspace_name,
-                        "table_name": table_name,
-                    }
-                )
+        return column_rows
 
-                schema = table_info.get("schema", {})
-                primary_key = table_info.get("primary_key", [])
-                partition_keys = primary_key[:1]
-                clustering_keys = primary_key[1:]
+    def _determine_column_kind(
+        self, column_name, partition_keys, clustering_keys
+    ):
+        if column_name in partition_keys:
+            return "partition_key"
+        if column_name in clustering_keys:
+            return "clustering"
+        return "regular"
 
-                for column_name, data_type in schema.items():
-                    if column_name in partition_keys:
-                        kind = "partition_key"
-                    elif column_name in clustering_keys:
-                        kind = "clustering"
-                    else:
-                        kind = "regular"
+    def _build_index_rows(self, keyspace_name, table_name, table_info):
+        index_rows = []
+        for index in table_info.get("indexes", []) or []:
+            index_rows.append(
+                {
+                    "keyspace_name": keyspace_name,
+                    "table_name": table_name,
+                    "index_name": index.get("name"),
+                    "target": index.get("column"),
+                }
+            )
+        return index_rows
 
-                    columns_rows.append(
-                        {
-                            "keyspace_name": keyspace_name,
-                            "table_name": table_name,
-                            "column_name": column_name,
-                            "kind": kind,
-                            "type": data_type,
-                        }
-                    )
-
-                for index in table_info.get("indexes", []) or []:
-                    indexes_rows.append(
-                        {
-                            "keyspace_name": keyspace_name,
-                            "table_name": table_name,
-                            "index_name": index.get("name"),
-                            "target": index.get("column"),
-                        }
-                    )
-
-            views = keyspace_info.get("views", {})
-            for view_name, view_info in views.items():
-                views_rows.append(
-                    {
-                        "keyspace_name": keyspace_name,
-                        "view_name": view_name,
-                        "base_table_name": view_info.get("base_table"),
-                        "where_clause": view_info.get("where_clause", ""),
-                    }
-                )
-
-        system_schema_tables["keyspaces"]["data"] = keyspaces_rows
-        system_schema_tables["tables"]["data"] = tables_rows
-        system_schema_tables["columns"]["data"] = columns_rows
-        system_schema_tables["indexes"]["data"] = indexes_rows
-        system_schema_tables["views"]["data"] = views_rows
+    def _build_view_rows(self, keyspace_name, keyspace_info):
+        view_rows = []
+        for view_name, view_info in keyspace_info.get("views", {}).items():
+            view_rows.append(
+                {
+                    "keyspace_name": keyspace_name,
+                    "view_name": view_name,
+                    "base_table_name": view_info.get("base_table"),
+                    "where_clause": view_info.get("where_clause", ""),
+                }
+            )
+        return view_rows
 
 
 _global_state = None
