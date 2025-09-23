@@ -95,7 +95,11 @@ def mock_scylladb(func):
 
 
 class MockCluster:
-    pass
+    """Placeholder for potential cluster-level behaviour."""
+
+    def shutdown(self):
+        """Maintain parity with driver Cluster.shutdown()."""
+        print("MockCluster shutdown called")
 
 
 class MockSession:
@@ -106,10 +110,12 @@ class MockSession:
             )
         self.keyspace = keyspace
         self.state = state
+        self._is_shutdown = False
         print(f"Set keyspace to: {keyspace}")
 
     def set_keyspace(self, keyspace):
         """Sets the current keyspace for the session."""
+        self._ensure_open()
         if keyspace not in self.state.keyspaces:
             raise Exception(f"Keyspace '{keyspace}' does not exist")
         self.keyspace = keyspace
@@ -130,12 +136,33 @@ class MockSession:
         driver but are currently ignored.
         """
 
+        self._ensure_open()
         print(
             f"MockSession execute called with query: {query}; "
             f"execution_profile={execution_profile}"
         )
 
         return handle_query(query, self, self.state, parameters=parameters)
+
+    def shutdown(self):
+        """Release session resources and prevent further queries."""
+
+        if self._is_shutdown:
+            return
+        self._is_shutdown = True
+        print("MockSession shutdown called")
+
+    close = shutdown
+
+    @property
+    def is_shutdown(self):
+        return self._is_shutdown
+
+    def _ensure_open(self):
+        if self._is_shutdown:
+            raise RuntimeError(
+                "MockSession has been shut down; create a new session if needed."
+            )
 
 
 def _set_global_state(state):
