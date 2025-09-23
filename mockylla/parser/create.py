@@ -1,5 +1,7 @@
 import re
 
+from cassandra import InvalidRequest
+
 
 def _parse_column_defs(columns_str):
     """
@@ -27,7 +29,7 @@ def _parse_column_defs(columns_str):
 def handle_create_keyspace(create_keyspace_match, state):
     keyspace_name = create_keyspace_match.group(1)
     if keyspace_name in state.keyspaces:
-        raise Exception(f"Keyspace '{keyspace_name}' already exists")
+        raise InvalidRequest(f"Keyspace '{keyspace_name}' already exists")
 
     state.keyspaces[keyspace_name] = {"tables": {}}
     print(f"Created keyspace: {keyspace_name}")
@@ -42,13 +44,13 @@ def handle_create_table(create_table_match, session, state):
     elif session.keyspace:
         keyspace_name, table_name = session.keyspace, table_name_full
     else:
-        raise Exception("No keyspace specified for CREATE TABLE")
+        raise InvalidRequest("No keyspace specified for CREATE TABLE")
 
     if keyspace_name not in state.keyspaces:
-        raise Exception(f"Keyspace '{keyspace_name}' does not exist")
+        raise InvalidRequest(f"Keyspace '{keyspace_name}' does not exist")
 
     if table_name in state.keyspaces[keyspace_name]["tables"]:
-        raise Exception(
+        raise InvalidRequest(
             f"Table '{table_name}' already exists in keyspace '{keyspace_name}'"
         )
 

@@ -1,3 +1,4 @@
+from cassandra import InvalidRequest
 from cassandra.protocol import SyntaxException
 
 
@@ -14,7 +15,7 @@ def handle_alter_table(match, session, state):
     elif session.keyspace:
         keyspace_name, table_name = session.keyspace, table_name_full
     else:
-        raise Exception("No keyspace specified for ALTER TABLE")
+        raise InvalidRequest("No keyspace specified for ALTER TABLE")
 
     if (
         keyspace_name not in state.keyspaces

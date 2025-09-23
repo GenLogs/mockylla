@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from functools import wraps
 from unittest.mock import patch
 
+from cassandra import InvalidRequest
 from cassandra.query import BatchStatement as DriverBatchStatement
 from cassandra.query import Statement as DriverStatement
 
@@ -232,7 +233,7 @@ class MockSession:
         """Sets the current keyspace for the session."""
         self._ensure_open()
         if keyspace not in self.state.keyspaces:
-            raise Exception(f"Keyspace '{keyspace}' does not exist")
+            raise InvalidRequest(f"Keyspace '{keyspace}' does not exist")
         self.keyspace = keyspace
         print(f"Set keyspace to: {keyspace}")
 
@@ -472,16 +473,16 @@ def _set_global_state(state):
 def get_keyspaces():
     """Returns a dictionary of the created keyspaces in the mock state."""
     if _global_state is None:
-        raise Exception("Mock is not active.")
+        raise InvalidRequest("Mock is not active.")
     return _global_state.keyspaces
 
 
 def get_tables(keyspace_name):
     """Returns a dictionary of the created tables for a given keyspace."""
     if _global_state is None:
-        raise Exception("Mock is not active.")
+        raise InvalidRequest("Mock is not active.")
     if keyspace_name not in _global_state.keyspaces:
-        raise Exception(
+        raise InvalidRequest(
             f"Keyspace '{keyspace_name}' does not exist in mock state."
         )
     return _global_state.keyspaces[keyspace_name]["tables"]
@@ -491,7 +492,7 @@ def get_table_rows(keyspace_name, table_name):
     """Returns a list of rows for a given table in a keyspace."""
     tables = get_tables(keyspace_name)
     if table_name not in tables:
-        raise Exception(
+        raise InvalidRequest(
             f"Table '{table_name}' does not exist in keyspace '{keyspace_name}'."
         )
     return tables[table_name]["data"]
@@ -500,9 +501,9 @@ def get_table_rows(keyspace_name, table_name):
 def get_types(keyspace_name):
     """Returns a dictionary of the created types for a given keyspace."""
     if _global_state is None:
-        raise Exception("Mock is not active.")
+        raise InvalidRequest("Mock is not active.")
     if keyspace_name not in _global_state.keyspaces:
-        raise Exception(
+        raise InvalidRequest(
             f"Keyspace '{keyspace_name}' does not exist in mock state."
         )
     return _global_state.keyspaces[keyspace_name].get("types", {})

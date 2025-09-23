@@ -1,3 +1,6 @@
+from cassandra import InvalidRequest
+
+
 def handle_drop_table(drop_table_match, session, state):
     table_name_full = drop_table_match.group(1)
 
@@ -6,7 +9,7 @@ def handle_drop_table(drop_table_match, session, state):
     elif session.keyspace:
         keyspace_name, table_name = session.keyspace, table_name_full
     else:
-        raise Exception("No keyspace specified for DROP TABLE")
+        raise InvalidRequest("No keyspace specified for DROP TABLE")
 
     if (
         keyspace_name not in state.keyspaces
@@ -14,7 +17,7 @@ def handle_drop_table(drop_table_match, session, state):
     ):
         if "IF EXISTS" in drop_table_match.string.upper():
             return []
-        raise Exception(f"Table '{table_name_full}' does not exist")
+        raise InvalidRequest(f"Table '{table_name_full}' does not exist")
 
     del state.keyspaces[keyspace_name]["tables"][table_name]
     print(f"Dropped table '{table_name}' from keyspace '{keyspace_name}'")

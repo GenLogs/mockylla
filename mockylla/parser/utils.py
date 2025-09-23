@@ -4,6 +4,8 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from cassandra import InvalidRequest
+
 
 def cast_value(value, cql_type):
     """Casts a value to a Python type based on CQL type."""
@@ -40,7 +42,7 @@ def get_keyspace_and_name(name_full, session_keyspace):
     elif session_keyspace:
         keyspace_name, name = session_keyspace, name_full
     else:
-        raise Exception(f"No keyspace specified for {name_full}")
+        raise InvalidRequest(f"No keyspace specified for {name_full}")
     return keyspace_name, name
 
 
@@ -54,7 +56,7 @@ def get_table(table_name_full, session, state):
         keyspace_name not in state.keyspaces
         or table_name not in state.keyspaces[keyspace_name]["tables"]
     ):
-        raise Exception(f"Table '{table_name_full}' does not exist")
+        raise InvalidRequest(f"Table '{table_name_full}' does not exist")
 
     table_info = state.keyspaces[keyspace_name]["tables"][table_name]
     return keyspace_name, table_name, table_info

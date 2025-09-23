@@ -1,3 +1,5 @@
+from cassandra import InvalidRequest
+
 from mockylla.parser.utils import get_keyspace_and_name
 
 
@@ -11,7 +13,7 @@ def handle_create_type(match, session, state):
     )
 
     if keyspace_name not in state.keyspaces:
-        raise Exception(f"Keyspace '{keyspace_name}' does not exist")
+        raise InvalidRequest(f"Keyspace '{keyspace_name}' does not exist")
 
     if "types" not in state.keyspaces[keyspace_name]:
         state.keyspaces[keyspace_name]["types"] = {}
