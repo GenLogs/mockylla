@@ -101,6 +101,7 @@ def handle_create_table(create_table_match, session, state):
         "schema": schema,
         "primary_key": primary_key,
         "data": [],
+        "indexes": [],
     }
     print(
         f"Created table '{table_name}' in keyspace '{keyspace_name}' with schema: {schema}"

@@ -14,7 +14,7 @@ def handle_batch(batch_match, session, state, parameters=None):
 
     for query in queries:
         insert_match = re.match(
-            r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(IF NOT EXISTS)?\s*;?\s*$",
+            r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(?:USING\s+(.*?))?\s*(IF\s+NOT\s+EXISTS)?\s*;?\s*$",
             query,
             re.IGNORECASE | re.DOTALL,
         )
@@ -25,7 +25,7 @@ def handle_batch(batch_match, session, state, parameters=None):
             continue
 
         update_match = re.match(
-            r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
+            r"^\s*UPDATE\s+([\w\.]+)(?:\s+USING\s+(.*?))?\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF\s+EXISTS)?\s*;?\s*$",
             query,
             re.IGNORECASE | re.DOTALL,
         )

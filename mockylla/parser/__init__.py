@@ -10,6 +10,7 @@ from mockylla.parser.create import (
 from mockylla.parser.delete import handle_delete_from
 from mockylla.parser.drop import handle_drop_table
 from mockylla.parser.insert import handle_insert_into
+from mockylla.parser.index import handle_create_index
 from mockylla.parser.select import handle_select_from
 from mockylla.parser.truncate import handle_truncate_table
 from mockylla.parser.update import handle_update
@@ -21,6 +22,15 @@ def handle_query(query, session, state, parameters=None):
     Parses and handles a CQL query.
     """
     query = query.strip()
+
+    use_match = re.match(
+        r"^\s*USE\s+(\w+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if use_match:
+        session.set_keyspace(use_match.group(1))
+        return ResultSet([])
 
     batch_match = re.match(
         r"^\s*BEGIN\s+BATCH\s+(.*?)\s+APPLY\s+BATCH\s*;?\s*$",
@@ -59,7 +69,7 @@ def handle_query(query, session, state, parameters=None):
         return ResultSet([])
 
     insert_match = re.match(
-        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(IF NOT EXISTS)?\s*;?\s*$",
+        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(?:USING\s+(.*?))?\s*(IF\s+NOT\s+EXISTS)?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -87,7 +97,7 @@ def handle_query(query, session, state, parameters=None):
         return ResultSet(rows)
 
     update_match = re.match(
-        r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
+        r"^\s*UPDATE\s+([\w\.]+)(?:\s+USING\s+(.*?))?\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF\s+EXISTS)?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -133,6 +143,15 @@ def handle_query(query, session, state, parameters=None):
     )
     if alter_table_match:
         handle_alter_table(alter_table_match, session, state)
+        return ResultSet([])
+
+    create_index_match = re.match(
+        r"^\s*CREATE\s+(?:CUSTOM\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:([\w]+)\s+)?ON\s+([\w\.]+)\s*\(([^\)]+)\)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if create_index_match:
+        handle_create_index(create_index_match, session, state)
         return ResultSet([])
 
     return f"Error: Unsupported query: {query}"

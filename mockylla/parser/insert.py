@@ -70,8 +70,11 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         table_name_full,
         columns_str,
         values_str,
+        using_clause,
         if_not_exists,
     ) = insert_match.groups()
+
+    del using_clause
 
     if "." in table_name_full:
         keyspace_name, table_name = table_name_full.split(".", 1)

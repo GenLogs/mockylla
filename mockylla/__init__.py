@@ -36,6 +36,7 @@ class ScyllaState:
                                 "rack": "rack1",
                             }
                         ],
+                        "indexes": [],
                     }
                 },
                 "types": {},
@@ -89,6 +90,20 @@ class ScyllaState:
                         ],
                         "data": [],
                     },
+                    "indexes": {
+                        "schema": {
+                            "keyspace_name": "text",
+                            "table_name": "text",
+                            "index_name": "text",
+                            "target": "text",
+                        },
+                        "primary_key": [
+                            "keyspace_name",
+                            "table_name",
+                            "index_name",
+                        ],
+                        "data": [],
+                    },
                 },
                 "types": {},
                 "replication": {
@@ -105,6 +120,7 @@ class ScyllaState:
         keyspaces_rows = []
         tables_rows = []
         columns_rows = []
+        indexes_rows = []
 
         for keyspace_name, keyspace_info in self.keyspaces.items():
             replication = {
@@ -157,9 +173,20 @@ class ScyllaState:
                         }
                     )
 
+                for index in table_info.get("indexes", []) or []:
+                    indexes_rows.append(
+                        {
+                            "keyspace_name": keyspace_name,
+                            "table_name": table_name,
+                            "index_name": index.get("name"),
+                            "target": index.get("column"),
+                        }
+                    )
+
         system_schema_tables["keyspaces"]["data"] = keyspaces_rows
         system_schema_tables["tables"]["data"] = tables_rows
         system_schema_tables["columns"]["data"] = columns_rows
+        system_schema_tables["indexes"]["data"] = indexes_rows
 
 
 _global_state = None
@@ -343,6 +370,13 @@ class MockTableMetadata:
         ]
         self.primary_key = [
             self.columns[col] for col in primary_key if col in self.columns
+        ]
+        self.indexes = [
+            {
+                "name": idx.get("name"),
+                "column": idx.get("column"),
+            }
+            for idx in table_info.get("indexes", []) or []
         ]
 
     def column(self, name):
