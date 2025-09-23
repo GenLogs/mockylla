@@ -40,6 +40,7 @@ class ScyllaState:
                     }
                 },
                 "types": {},
+                "views": {},
                 "replication": {
                     "class": "SimpleStrategy",
                     "replication_factor": "1",
@@ -104,6 +105,19 @@ class ScyllaState:
                         ],
                         "data": [],
                     },
+                    "views": {
+                        "schema": {
+                            "keyspace_name": "text",
+                            "view_name": "text",
+                            "base_table_name": "text",
+                            "where_clause": "text",
+                        },
+                        "primary_key": [
+                            "keyspace_name",
+                            "view_name",
+                        ],
+                        "data": [],
+                    },
                 },
                 "types": {},
                 "replication": {
@@ -121,6 +135,7 @@ class ScyllaState:
         tables_rows = []
         columns_rows = []
         indexes_rows = []
+        views_rows = []
 
         for keyspace_name, keyspace_info in self.keyspaces.items():
             replication = {
@@ -183,10 +198,22 @@ class ScyllaState:
                         }
                     )
 
+            views = keyspace_info.get("views", {})
+            for view_name, view_info in views.items():
+                views_rows.append(
+                    {
+                        "keyspace_name": keyspace_name,
+                        "view_name": view_name,
+                        "base_table_name": view_info.get("base_table"),
+                        "where_clause": view_info.get("where_clause", ""),
+                    }
+                )
+
         system_schema_tables["keyspaces"]["data"] = keyspaces_rows
         system_schema_tables["tables"]["data"] = tables_rows
         system_schema_tables["columns"]["data"] = columns_rows
         system_schema_tables["indexes"]["data"] = indexes_rows
+        system_schema_tables["views"]["data"] = views_rows
 
 
 _global_state = None
@@ -345,9 +372,16 @@ class MockKeyspaceMetadata:
             for table_name, table_info in info.get("tables", {}).items()
         }
         self.user_types = info.get("types", {})
+        self.views = {
+            view_name: MockMaterializedViewMetadata(name, view_name, view_info)
+            for view_name, view_info in info.get("views", {}).items()
+        }
 
     def table(self, name):
         return self.tables.get(name)
+
+    def view(self, name):
+        return self.views.get(name)
 
 
 class MockTableMetadata:
@@ -378,9 +412,23 @@ class MockTableMetadata:
             }
             for idx in table_info.get("indexes", []) or []
         ]
+        self.options = table_info.get("options", {})
 
     def column(self, name):
         return self.columns.get(name)
+
+
+class MockMaterializedViewMetadata:
+    """Represents materialized view metadata."""
+
+    def __init__(self, keyspace_name, view_name, view_info):
+        self.keyspace = keyspace_name
+        self.name = view_name
+        self.base_table = view_info.get("base_table")
+        self.base_keyspace = view_info.get("base_keyspace", keyspace_name)
+        self.where_clause = view_info.get("where_clause")
+        self.primary_key = view_info.get("primary_key", [])
+        self.options = view_info.get("options", {})
 
 
 class MockColumnMetadata:

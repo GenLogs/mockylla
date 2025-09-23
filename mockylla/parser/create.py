@@ -38,6 +38,7 @@ def handle_create_keyspace(create_keyspace_match, state):
     state.keyspaces[keyspace_name] = {
         "tables": {},
         "types": {},
+        "views": {},
         "replication": replication,
         "durable_writes": True,
     }
@@ -47,7 +48,7 @@ def handle_create_keyspace(create_keyspace_match, state):
 
 
 def handle_create_table(create_table_match, session, state):
-    table_name_full, columns_str = create_table_match.groups()
+    table_name_full, columns_str, options_str = create_table_match.groups()
 
     if "." in table_name_full:
         keyspace_name, table_name = table_name_full.split(".", 1)
@@ -97,11 +98,18 @@ def handle_create_table(create_table_match, session, state):
 
     schema = {name: type_ for name, type_ in columns if name}
 
+    options = {}
+    if options_str:
+        from mockylla.parser.utils import parse_with_options
+
+        options = parse_with_options(options_str)
+
     state.keyspaces[keyspace_name]["tables"][table_name] = {
         "schema": schema,
         "primary_key": primary_key,
         "data": [],
         "indexes": [],
+        "options": options,
     }
     print(
         f"Created table '{table_name}' in keyspace '{keyspace_name}' with schema: {schema}"

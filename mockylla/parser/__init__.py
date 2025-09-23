@@ -1,7 +1,7 @@
 import re
 
 from mockylla.results import ResultSet
-from mockylla.parser.alter import handle_alter_table
+from mockylla.parser.alter import handle_alter_table, handle_alter_table_with
 from mockylla.parser.batch import handle_batch
 from mockylla.parser.create import (
     handle_create_keyspace,
@@ -15,6 +15,10 @@ from mockylla.parser.drop import (
 )
 from mockylla.parser.insert import handle_insert_into
 from mockylla.parser.index import handle_create_index
+from mockylla.parser.materialized_view import (
+    handle_create_materialized_view,
+    handle_drop_materialized_view,
+)
 from mockylla.parser.select import handle_select_from
 from mockylla.parser.truncate import handle_truncate_table
 from mockylla.parser.update import handle_update
@@ -55,7 +59,7 @@ def handle_query(query, session, state, parameters=None):
         return ResultSet([])
 
     create_table_match = re.match(
-        r"^\s*CREATE\s+TABLE\s+(?:IF NOT EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*;?\s*$",
+        r"^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*(?:WITH\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -70,6 +74,19 @@ def handle_query(query, session, state, parameters=None):
     )
     if create_type_match:
         handle_create_type(create_type_match, session, state)
+        return ResultSet([])
+
+    create_mv_match = re.match(
+        (
+            r"^\s*CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s+AS\s+SELECT\s+"
+            r"(.*?)\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)\s+PRIMARY\s+KEY\s*\((.*?)\)"
+            r"\s*(?:WITH\s+(.*))?\s*;?\s*$"
+        ),
+        query,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if create_mv_match:
+        handle_create_materialized_view(create_mv_match, session, state)
         return ResultSet([])
 
     insert_match = re.match(
@@ -140,6 +157,15 @@ def handle_query(query, session, state, parameters=None):
         handle_drop_table(drop_table_match, session, state)
         return ResultSet([])
 
+    drop_mv_match = re.match(
+        r"^\s*DROP\s+MATERIALIZED\s+VIEW\s+(?:IF\s+EXISTS\s+)?([\w\.]+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if drop_mv_match:
+        handle_drop_materialized_view(drop_mv_match, session, state)
+        return ResultSet([])
+
     truncate_table_match = re.match(
         r"^\s*TRUNCATE\s+(?:TABLE\s+)?([\w\.]+)\s*;?\s*$",
         query,
@@ -156,6 +182,15 @@ def handle_query(query, session, state, parameters=None):
     )
     if alter_table_match:
         handle_alter_table(alter_table_match, session, state)
+        return ResultSet([])
+
+    alter_table_with_match = re.match(
+        r"^\s*ALTER\s+TABLE\s+([\w\.]+)\s+WITH\s+(.*)\s*;?\s*$",
+        query,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if alter_table_with_match:
+        handle_alter_table_with(alter_table_with_match, session, state)
         return ResultSet([])
 
     create_index_match = re.match(

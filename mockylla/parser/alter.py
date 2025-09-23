@@ -1,6 +1,8 @@
 from cassandra import InvalidRequest
 from cassandra.protocol import SyntaxException
 
+from mockylla.parser.utils import parse_with_options, get_table
+
 
 def handle_alter_table(match, session, state):
     """
@@ -33,6 +35,25 @@ def handle_alter_table(match, session, state):
     print(
         f"Altered table '{table_name}' in keyspace '{keyspace_name}': "
         f"added column '{new_column_name} {new_column_type}'"
+    )
+
+    state.update_system_schema()
+    return []
+
+
+def handle_alter_table_with(match, session, state):
+    table_name_full, options_str = match.groups()
+
+    keyspace_name, table_name, table_info = get_table(
+        table_name_full, session, state
+    )
+
+    new_options = parse_with_options(options_str)
+    existing_options = table_info.setdefault("options", {})
+    existing_options.update(new_options)
+
+    print(
+        f"Altered table '{table_name}' in keyspace '{keyspace_name}' options: {new_options}"
     )
 
     state.update_system_schema()

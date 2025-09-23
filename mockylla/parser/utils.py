@@ -62,6 +62,32 @@ def get_table(table_name_full, session, state):
     return keyspace_name, table_name, table_info
 
 
+def parse_with_options(options_str):
+    """Parse WITH options into a dictionary."""
+
+    if not options_str:
+        return {}
+
+    options = {}
+    # Normalize spacing and split by AND while respecting case-insensitivity
+    parts = re.split(r"\s+AND\s+", options_str.strip(), flags=re.IGNORECASE)
+
+    for part in parts:
+        cleaned = part.strip().rstrip(";")
+        if not cleaned:
+            continue
+        if "=" not in cleaned:
+            continue
+        key, value = cleaned.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if value.startswith("'") and value.endswith("'"):
+            value = value[1:-1]
+        options[key] = value
+
+    return options
+
+
 def parse_where_clause(where_clause_str, schema):
     """Parse WHERE clause conditions into structured format."""
     where_clause_str = where_clause_str.rstrip(";")

@@ -37,6 +37,10 @@ def handle_drop_table(drop_table_match, session, state):
         raise InvalidRequest(f"Table '{table_name_full}' does not exist")
 
     del state.keyspaces[keyspace_name]["tables"][table_name]
+    views = state.keyspaces[keyspace_name].get("views", {})
+    for view_name, view_info in list(views.items()):
+        if view_info.get("base_table") == table_name:
+            del views[view_name]
     state.update_system_schema()
     print(f"Dropped table '{table_name}' from keyspace '{keyspace_name}'")
     return []
