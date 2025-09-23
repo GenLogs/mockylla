@@ -39,12 +39,127 @@ class ScyllaState:
                     }
                 },
                 "types": {},
+                "replication": {
+                    "class": "SimpleStrategy",
+                    "replication_factor": "1",
+                },
+                "durable_writes": True,
             }
         }
+        self._ensure_system_schema_structure()
+        self.update_system_schema()
 
     def reset(self):
         """Resets the state to a clean slate."""
         self.__init__()
+
+    def _ensure_system_schema_structure(self):
+        if "system_schema" not in self.keyspaces:
+            self.keyspaces["system_schema"] = {
+                "tables": {
+                    "keyspaces": {
+                        "schema": {
+                            "keyspace_name": "text",
+                            "durable_writes": "boolean",
+                            "replication": "map<text, text>",
+                        },
+                        "primary_key": ["keyspace_name"],
+                        "data": [],
+                    },
+                    "tables": {
+                        "schema": {
+                            "keyspace_name": "text",
+                            "table_name": "text",
+                        },
+                        "primary_key": ["keyspace_name", "table_name"],
+                        "data": [],
+                    },
+                    "columns": {
+                        "schema": {
+                            "keyspace_name": "text",
+                            "table_name": "text",
+                            "column_name": "text",
+                            "kind": "text",
+                            "type": "text",
+                        },
+                        "primary_key": [
+                            "keyspace_name",
+                            "table_name",
+                            "column_name",
+                        ],
+                        "data": [],
+                    },
+                },
+                "types": {},
+                "replication": {
+                    "class": "SimpleStrategy",
+                    "replication_factor": "1",
+                },
+                "durable_writes": True,
+            }
+
+    def update_system_schema(self):
+        self._ensure_system_schema_structure()
+
+        system_schema_tables = self.keyspaces["system_schema"]["tables"]
+        keyspaces_rows = []
+        tables_rows = []
+        columns_rows = []
+
+        for keyspace_name, keyspace_info in self.keyspaces.items():
+            replication = {
+                str(k): str(v)
+                for k, v in keyspace_info.get("replication", {}).items()
+            }
+            if not replication:
+                replication = {
+                    "class": "SimpleStrategy",
+                    "replication_factor": "1",
+                }
+
+            keyspaces_rows.append(
+                {
+                    "keyspace_name": keyspace_name,
+                    "durable_writes": keyspace_info.get("durable_writes", True),
+                    "replication": replication,
+                }
+            )
+
+            tables = keyspace_info.get("tables", {})
+            for table_name, table_info in tables.items():
+                tables_rows.append(
+                    {
+                        "keyspace_name": keyspace_name,
+                        "table_name": table_name,
+                    }
+                )
+
+                schema = table_info.get("schema", {})
+                primary_key = table_info.get("primary_key", [])
+                partition_keys = primary_key[:1]
+                clustering_keys = primary_key[1:]
+
+                for column_name, data_type in schema.items():
+                    if column_name in partition_keys:
+                        kind = "partition_key"
+                    elif column_name in clustering_keys:
+                        kind = "clustering"
+                    else:
+                        kind = "regular"
+
+                    columns_rows.append(
+                        {
+                            "keyspace_name": keyspace_name,
+                            "table_name": table_name,
+                            "column_name": column_name,
+                            "kind": kind,
+                            "type": data_type,
+                        }
+                    )
+
+        system_schema_tables["keyspaces"]["data"] = keyspaces_rows
+        system_schema_tables["tables"]["data"] = tables_rows
+        system_schema_tables["columns"]["data"] = columns_rows
 
 
 _global_state = None
@@ -80,6 +195,8 @@ class MockScyllaDB:
                 state=self.state,
                 cluster=cluster_self,
             )
+            cluster_self.metadata = MockMetadata(self.state)
+            session.metadata = cluster_self.metadata
             return session
 
         self.cluster_connect_patcher = patch(
@@ -167,6 +284,78 @@ class MockBatchStatement:
     @property
     def statements_and_parameters(self):
         return list(self._statements)
+
+
+class MockMetadata:
+    """Minimal metadata facade mirroring cassandra.cluster.Metadata."""
+
+    def __init__(self, state):
+        self._state = state
+
+    @property
+    def keyspaces(self):
+        return {
+            name: MockKeyspaceMetadata(name, info)
+            for name, info in self._state.keyspaces.items()
+        }
+
+    def get_keyspace(self, name):
+        return self.keyspaces.get(name)
+
+    def refresh(self):
+        return self
+
+
+class MockKeyspaceMetadata:
+    """Represents keyspace metadata."""
+
+    def __init__(self, name, info):
+        self.name = name
+        self.durable_writes = info.get("durable_writes", True)
+        self.replication_strategy = info.get("replication", {})
+        self.tables = {
+            table_name: MockTableMetadata(name, table_name, table_info)
+            for table_name, table_info in info.get("tables", {}).items()
+        }
+        self.user_types = info.get("types", {})
+
+    def table(self, name):
+        return self.tables.get(name)
+
+
+class MockTableMetadata:
+    """Represents table metadata."""
+
+    def __init__(self, keyspace_name, table_name, table_info):
+        self.keyspace = keyspace_name
+        self.name = table_name
+        schema = table_info.get("schema", {})
+        self.columns = {
+            column_name: MockColumnMetadata(column_name, column_type)
+            for column_name, column_type in schema.items()
+        }
+        primary_key = table_info.get("primary_key", [])
+        self.partition_key = [
+            self.columns[col] for col in primary_key[:1] if col in self.columns
+        ]
+        self.clustering_key = [
+            self.columns[col] for col in primary_key[1:] if col in self.columns
+        ]
+        self.primary_key = [
+            self.columns[col] for col in primary_key if col in self.columns
+        ]
+
+    def column(self, name):
+        return self.columns.get(name)
+
+
+class MockColumnMetadata:
+    """Represents column metadata."""
+
+    def __init__(self, name, cql_type):
+        self.name = name
+        self.cql_type = cql_type
+        self.typestring = cql_type
 
 
 class MockResponseFuture:

@@ -1,3 +1,4 @@
+import ast
 import re
 
 from cassandra import InvalidRequest
@@ -28,11 +29,20 @@ def _parse_column_defs(columns_str):
 
 def handle_create_keyspace(create_keyspace_match, state):
     keyspace_name = create_keyspace_match.group(1)
+    replication_str = create_keyspace_match.group(2)
     if keyspace_name in state.keyspaces:
         raise InvalidRequest(f"Keyspace '{keyspace_name}' already exists")
 
-    state.keyspaces[keyspace_name] = {"tables": {}}
+    replication = _parse_replication(replication_str)
+
+    state.keyspaces[keyspace_name] = {
+        "tables": {},
+        "types": {},
+        "replication": replication,
+        "durable_writes": True,
+    }
     print(f"Created keyspace: {keyspace_name}")
+    state.update_system_schema()
     return []
 
 
@@ -95,4 +105,18 @@ def handle_create_table(create_table_match, session, state):
     print(
         f"Created table '{table_name}' in keyspace '{keyspace_name}' with schema: {schema}"
     )
+    state.update_system_schema()
     return []
+
+
+def _parse_replication(replication_str):
+    try:
+        replication_config = ast.literal_eval(replication_str)
+        if isinstance(replication_config, dict):
+            return {str(k): str(v) for k, v in replication_config.items()}
+    except (ValueError, SyntaxError):
+        pass
+    return {
+        "class": "SimpleStrategy",
+        "replication_factor": "1",
+    }

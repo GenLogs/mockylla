@@ -21,4 +21,5 @@ def handle_drop_table(drop_table_match, session, state):
 
     del state.keyspaces[keyspace_name]["tables"][table_name]
     print(f"Dropped table '{table_name}' from keyspace '{keyspace_name}'")
+    state.update_system_schema()
     return []

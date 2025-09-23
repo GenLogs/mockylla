@@ -35,4 +35,5 @@ def handle_alter_table(match, session, state):
         f"added column '{new_column_name} {new_column_type}'"
     )
 
+    state.update_system_schema()
     return []
