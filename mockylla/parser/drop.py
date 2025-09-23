@@ -46,6 +46,18 @@ def handle_drop_table(drop_table_match, session, state):
     return []
 
 
+def _validate_drop_index_keyspace(match, state, keyspace_name):
+    if not keyspace_name:
+        raise InvalidRequest("No keyspace specified for DROP INDEX")
+
+    if keyspace_name not in state.keyspaces:
+        if "IF EXISTS" in match.string.upper():
+            return False
+        raise InvalidRequest(f"Keyspace '{keyspace_name}' does not exist")
+
+    return True
+
+
 def handle_drop_index(match, session, state):
     index_name_full = match.group(1)
 
@@ -55,13 +67,8 @@ def handle_drop_index(match, session, state):
     else:
         index_name = index_name_full
 
-    if not keyspace_name:
-        raise InvalidRequest("No keyspace specified for DROP INDEX")
-
-    if keyspace_name not in state.keyspaces:
-        if "IF EXISTS" in match.string.upper():
-            return []
-        raise InvalidRequest(f"Keyspace '{keyspace_name}' does not exist")
+    if not _validate_drop_index_keyspace(match, state, keyspace_name):
+        return []
 
     tables = state.keyspaces[keyspace_name]["tables"]
     found = False
