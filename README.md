@@ -102,6 +102,18 @@ def test_crud():
 
 ---
 
+## 📚 Examples
+
+Browse the `examples/` directory for more focused walkthroughs:
+
+- `examples/00-basic-usage.md` – scaffold a keyspace, table, and CRUD flow with the decorator.
+- `examples/01-prepared-statements.md` – prepare, bind, and execute statements with tuple or mapping parameters.
+- `examples/02-batch-operations.md` – mix string `BEGIN BATCH` blocks with `BatchStatement` helpers and mock batches.
+- `examples/03-async-queries.md` – exercise `execute_async` flows and callbacks without a real cluster.
+- `examples/04-introspecting-state.md` – inspect keyspaces, tables, UDTs, and rows via the helper utilities.
+
+---
+
 ## 🔍 Public API
 
 | Function / Decorator              | Description                                                                                                |
