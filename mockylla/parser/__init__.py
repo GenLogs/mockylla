@@ -8,7 +8,11 @@ from mockylla.parser.create import (
     handle_create_table,
 )
 from mockylla.parser.delete import handle_delete_from
-from mockylla.parser.drop import handle_drop_table
+from mockylla.parser.drop import (
+    handle_drop_index,
+    handle_drop_keyspace,
+    handle_drop_table,
+)
 from mockylla.parser.insert import handle_insert_into
 from mockylla.parser.index import handle_create_index
 from mockylla.parser.select import handle_select_from
@@ -118,8 +122,17 @@ def handle_query(query, session, state, parameters=None):
         )
         return ResultSet(result)
 
+    drop_keyspace_match = re.match(
+        r"^\s*DROP\s+KEYSPACE\s+(?:IF\s+EXISTS\s+)?(\w+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if drop_keyspace_match:
+        handle_drop_keyspace(drop_keyspace_match, state)
+        return ResultSet([])
+
     drop_table_match = re.match(
-        r"^\s*DROP\s+TABLE\s+(?:IF EXISTS\s+)?([\w\.]+)\s*;?\s*$",
+        r"^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([\w\.]+)\s*;?\s*$",
         query,
         re.IGNORECASE,
     )
@@ -152,6 +165,15 @@ def handle_query(query, session, state, parameters=None):
     )
     if create_index_match:
         handle_create_index(create_index_match, session, state)
+        return ResultSet([])
+
+    drop_index_match = re.match(
+        r"^\s*DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([\w\.]+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if drop_index_match:
+        handle_drop_index(drop_index_match, session, state)
         return ResultSet([])
 
     return f"Error: Unsupported query: {query}"
