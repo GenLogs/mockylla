@@ -3,7 +3,11 @@ from collections.abc import Mapping, Sequence
 from functools import wraps
 from unittest.mock import patch
 
+from cassandra.query import BatchStatement as DriverBatchStatement
+from cassandra.query import Statement as DriverStatement
+
 from mockylla.parser import handle_query
+from mockylla.results import ResultSet
 
 
 CONNECTION_FACTORY_PATH = "cassandra.connection.Connection.factory"
@@ -141,6 +145,29 @@ class MockBoundStatement:
         return self.prepared_statement.query_string
 
 
+class MockBatchStatement:
+    """Lightweight batch statement for grouping CQL commands."""
+
+    def __init__(self, batch_type="LOGGED"):
+        self.batch_type = batch_type
+        self.consistency_level = None
+        self._statements = []
+
+    def add(self, statement, parameters=None):
+        self._statements.append((statement, parameters))
+
+    def add_all(self, statements):
+        for statement, parameters in statements:
+            self.add(statement, parameters)
+
+    def clear(self):
+        self._statements.clear()
+
+    @property
+    def statements_and_parameters(self):
+        return list(self._statements)
+
+
 class MockResponseFuture:
     """Simple future-like wrapper for execute_async."""
 
@@ -225,6 +252,15 @@ class MockSession:
         """
 
         self._ensure_open()
+
+        if isinstance(query, (DriverBatchStatement, MockBatchStatement)):
+            return self._execute_batch_statement(
+                query,
+                execution_profile=execution_profile,
+                parameters=parameters,
+                **kwargs,
+            )
+
         query_string, bound_values = self._normalise_query_input(
             query, parameters
         )
@@ -293,10 +329,31 @@ class MockSession:
             return query._internal_query, _coerce_parameters(
                 parameters, query.param_order
             )
+        if isinstance(query, DriverStatement):
+            return _normalise_placeholders(query.query_string), parameters
         return query, parameters
 
     def _run_query(self, query, parameters, **kwargs):
         return handle_query(query, self, self.state, parameters=parameters)
+
+    def _execute_batch_statement(
+        self, batch, *, execution_profile=None, parameters=None, **kwargs
+    ):
+        del parameters  # Not supported for driver batches
+        last_result = None
+
+        for statement, bound_params in _iter_batch_items(batch):
+            query_string, values = self._normalise_query_input(
+                statement, bound_params
+            )
+            last_result = self._run_query(
+                query_string,
+                values,
+                execution_profile=execution_profile,
+                **kwargs,
+            )
+
+        return last_result if last_result is not None else ResultSet([])
 
 
 def _normalise_placeholders(query):
@@ -389,6 +446,21 @@ def _coerce_parameters(values, param_order=None):
     if isinstance(values, Sequence) and not isinstance(values, (str, bytes)):
         return tuple(values)
     return (values,)
+
+
+def _iter_batch_items(batch):
+    if isinstance(batch, MockBatchStatement):
+        for statement, params in batch.statements_and_parameters:
+            yield statement, params
+        return
+
+    if isinstance(batch, DriverBatchStatement):
+        entries = getattr(batch, "_statements_and_parameters", [])
+        for _, statement, params in entries:
+            if isinstance(statement, MockBoundStatement):
+                yield statement, statement.values
+            else:
+                yield statement, params or None
 
 
 def _set_global_state(state):
