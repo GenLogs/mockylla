@@ -69,12 +69,13 @@ def test_insert_if_not_exists():
 
     lwt_query_fail = f"{insert_query} IF NOT EXISTS"
     result_fail = session.execute(lwt_query_fail)
-    assert result_fail.one()["[applied]"] is False
+    fail_row = result_fail.one()
+    assert fail_row["[applied]"] is False
     assert len(get_table_rows(keyspace_name, table_name)) == 1
-
-    assert result_fail.one()["user_id"] == 1
+    assert fail_row["user_id"] == 1
 
     lwt_query_success = f"INSERT INTO {table_name} (user_id, name, email) VALUES (2, 'Jane Doe', 'jane.doe@example.com') IF NOT EXISTS"
     result_success = session.execute(lwt_query_success)
-    assert result_success.one()["[applied]"] is True
+    success_row = result_success.one()
+    assert success_row["[applied]"] is True
     assert len(get_table_rows(keyspace_name, table_name)) == 2
