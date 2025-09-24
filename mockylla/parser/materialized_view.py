@@ -7,7 +7,6 @@ from copy import deepcopy
 from mockylla.parser.utils import (
     get_keyspace_and_name,
     get_table,
-    parse_where_clause,
     parse_with_options,
 )
 
