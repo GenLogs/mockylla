@@ -102,6 +102,18 @@ def test_crud():
 
 ---
 
+## 📚 Examples
+
+Browse the `examples/` directory for more focused walkthroughs:
+
+- `examples/00-basic-usage.md` – scaffold a keyspace, table, and CRUD flow with the decorator.
+- `examples/01-prepared-statements.md` – prepare, bind, and execute statements with tuple or mapping parameters.
+- `examples/02-batch-operations.md` – mix string `BEGIN BATCH` blocks with `BatchStatement` helpers and mock batches.
+- `examples/03-async-queries.md` – exercise `execute_async` flows and callbacks without a real cluster.
+- `examples/04-introspecting-state.md` – inspect keyspaces, tables, UDTs, and rows via the helper utilities.
+
+---
+
 ## 🔍 Public API
 
 | Function / Decorator              | Description                                                                                                |
@@ -111,6 +123,20 @@ def test_crud():
 | `get_tables(keyspace)`            | Return a `dict` of table names → definition.                                                               |
 | `get_table_rows(keyspace, table)` | Return the current rows for *table* as a `list[dict]`.                                                     |
 | `get_types(keyspace)`             | Return user-defined types for the keyspace.                                                                |
+
+---
+
+## 🗂️ Package Structure
+
+The implementation now lives in the `mockylla/classes/` package, split into focused modules:
+
+- `state.py` – in-memory `ScyllaState` and helpers for inspecting tables, rows, and types.
+- `statements.py` – prepared/bound/batch statement shims plus placeholder utilities.
+- `session.py` – `MockSession`, `MockCluster`, and async response primitives.
+- `metadata.py` – lightweight metadata facades mirroring the driver objects.
+- `scylladb.py` – context manager + decorator that patch the driver and bootstrap state.
+
+The top-level `mockylla/__init__.py` re-exports the public API unchanged for consumers.
 
 ---
 

@@ -1,15 +1,24 @@
 import re
 
 from mockylla.results import ResultSet
-from mockylla.parser.alter import handle_alter_table
+from mockylla.parser.alter import handle_alter_table, handle_alter_table_with
 from mockylla.parser.batch import handle_batch
 from mockylla.parser.create import (
     handle_create_keyspace,
     handle_create_table,
 )
 from mockylla.parser.delete import handle_delete_from
-from mockylla.parser.drop import handle_drop_table
+from mockylla.parser.drop import (
+    handle_drop_index,
+    handle_drop_keyspace,
+    handle_drop_table,
+)
 from mockylla.parser.insert import handle_insert_into
+from mockylla.parser.index import handle_create_index
+from mockylla.parser.materialized_view import (
+    handle_create_materialized_view,
+    handle_drop_materialized_view,
+)
 from mockylla.parser.select import handle_select_from
 from mockylla.parser.truncate import handle_truncate_table
 from mockylla.parser.update import handle_update
@@ -22,54 +31,121 @@ def handle_query(query, session, state, parameters=None):
     """
     query = query.strip()
 
-    batch_match = re.match(
+    handlers = [
+        _handle_use,
+        _handle_batch,
+        _handle_create_keyspace,
+        _handle_create_table,
+        _handle_create_type,
+        _handle_create_materialized_view,
+        _handle_insert,
+        _handle_select,
+        _handle_update,
+        _handle_delete,
+        _handle_drop_keyspace,
+        _handle_drop_table,
+        _handle_drop_materialized_view,
+        _handle_truncate_table,
+        _handle_alter_table,
+        _handle_alter_table_with,
+        _handle_create_index,
+        _handle_drop_index,
+    ]
+
+    for handler in handlers:
+        result = handler(query, session, state, parameters)
+        if result is not None:
+            return result
+
+    return f"Error: Unsupported query: {query}"
+
+
+def _handle_use(query, session, _state, _parameters):
+    match = re.match(r"^\s*USE\s+(\w+)\s*;?\s*$", query, re.IGNORECASE)
+    if not match:
+        return None
+    session.set_keyspace(match.group(1))
+    return ResultSet([])
+
+
+def _handle_batch(query, session, state, parameters):
+    match = re.match(
         r"^\s*BEGIN\s+BATCH\s+(.*?)\s+APPLY\s+BATCH\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
-    if batch_match:
-        handle_batch(batch_match, session, state, parameters=parameters)
-        return ResultSet([])
+    if not match:
+        return None
+    handle_batch(match, session, state, parameters=parameters)
+    return ResultSet([])
 
-    create_keyspace_match = re.match(
+
+def _handle_create_keyspace(query, _session, state, _parameters):
+    match = re.match(
         r"^\s*CREATE\s+KEYSPACE\s+(?:IF NOT EXISTS\s+)?(\w+)\s+WITH\s+REPLICATION\s*=\s*({.*})\s*;?\s*$",
         query,
         re.IGNORECASE,
     )
-    if create_keyspace_match:
-        handle_create_keyspace(create_keyspace_match, state)
-        return ResultSet([])
+    if not match:
+        return None
+    handle_create_keyspace(match, state)
+    return ResultSet([])
 
-    create_table_match = re.match(
-        r"^\s*CREATE\s+TABLE\s+(?:IF NOT EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*;?\s*$",
+
+def _handle_create_table(query, session, state, _parameters):
+    match = re.match(
+        r"^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*(?:WITH\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
-    if create_table_match:
-        handle_create_table(create_table_match, session, state)
-        return ResultSet([])
+    if not match:
+        return None
+    handle_create_table(match, session, state)
+    return ResultSet([])
 
-    create_type_match = re.match(
+
+def _handle_create_type(query, session, state, _parameters):
+    match = re.match(
         r"^\s*CREATE\s+TYPE\s+(?:IF NOT EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
-    if create_type_match:
-        handle_create_type(create_type_match, session, state)
-        return ResultSet([])
+    if not match:
+        return None
+    handle_create_type(match, session, state)
+    return ResultSet([])
 
-    insert_match = re.match(
-        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(IF NOT EXISTS)?\s*;?\s*$",
+
+def _handle_create_materialized_view(query, session, state, _parameters):
+    match = re.match(
+        (
+            r"^\s*CREATE\s+MATERIALIZED\s+VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s+AS\s+SELECT\s+"
+            r"(.*?)\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)\s+PRIMARY\s+KEY\s*\((.*?)\)"
+            r"\s*(?:WITH\s+(.*))?\s*;?\s*$"
+        ),
         query,
         re.IGNORECASE | re.DOTALL,
     )
-    if insert_match:
-        result = handle_insert_into(
-            insert_match, session, state, parameters=parameters
-        )
-        return ResultSet(result)
+    if not match:
+        return None
+    handle_create_materialized_view(match, session, state)
+    return ResultSet([])
 
-    select_match = re.match(
+
+def _handle_insert(query, session, state, parameters):
+    match = re.match(
+        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(?:USING\s+(.*?))?\s*(IF\s+NOT\s+EXISTS)?\s*;?\s*$",
+        query,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+    result = handle_insert_into(match, session, state, parameters=parameters)
+    return ResultSet(result)
+
+
+def _handle_select(query, session, state, parameters):
+    match = re.match(
         (
             r"^\s*SELECT\s+(.*?)\s+FROM\s+([\w\.]+)"
             r"(?:\s+WHERE\s+(.*?))?"
@@ -80,59 +156,127 @@ def handle_query(query, session, state, parameters=None):
         query,
         re.IGNORECASE | re.DOTALL,
     )
-    if select_match:
-        rows = handle_select_from(
-            select_match, session, state, parameters=parameters
-        )
-        return ResultSet(rows)
+    if not match:
+        return None
+    rows = handle_select_from(match, session, state, parameters=parameters)
+    return ResultSet(rows)
 
-    update_match = re.match(
-        r"^\s*UPDATE\s+([\w\.]+)\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
+
+def _handle_update(query, session, state, parameters):
+    match = re.match(
+        r"^\s*UPDATE\s+([\w\.]+)(?:\s+USING\s+(.*?))?\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF\s+EXISTS)?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
-    if update_match:
-        result = handle_update(
-            update_match, session, state, parameters=parameters
-        )
-        return ResultSet(result)
+    if not match:
+        return None
+    result = handle_update(match, session, state, parameters=parameters)
+    return ResultSet(result)
 
-    delete_match = re.match(
+
+def _handle_delete(query, session, state, parameters):
+    match = re.match(
         r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
         query,
         re.IGNORECASE,
     )
-    if delete_match:
-        result = handle_delete_from(
-            delete_match, session, state, parameters=parameters
-        )
-        return ResultSet(result)
+    if not match:
+        return None
+    result = handle_delete_from(match, session, state, parameters=parameters)
+    return ResultSet(result)
 
-    drop_table_match = re.match(
-        r"^\s*DROP\s+TABLE\s+(?:IF EXISTS\s+)?([\w\.]+)\s*;?\s*$",
+
+def _handle_drop_keyspace(query, _session, state, _parameters):
+    match = re.match(
+        r"^\s*DROP\s+KEYSPACE\s+(?:IF\s+EXISTS\s+)?(\w+)\s*;?\s*$",
         query,
         re.IGNORECASE,
     )
-    if drop_table_match:
-        handle_drop_table(drop_table_match, session, state)
-        return ResultSet([])
+    if not match:
+        return None
+    handle_drop_keyspace(match, state)
+    return ResultSet([])
 
-    truncate_table_match = re.match(
+
+def _handle_drop_table(query, session, state, _parameters):
+    match = re.match(
+        r"^\s*DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([\w\.]+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    handle_drop_table(match, session, state)
+    return ResultSet([])
+
+
+def _handle_drop_materialized_view(query, session, state, _parameters):
+    match = re.match(
+        r"^\s*DROP\s+MATERIALIZED\s+VIEW\s+(?:IF\s+EXISTS\s+)?([\w\.]+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    handle_drop_materialized_view(match, session, state)
+    return ResultSet([])
+
+
+def _handle_truncate_table(query, session, state, _parameters):
+    match = re.match(
         r"^\s*TRUNCATE\s+(?:TABLE\s+)?([\w\.]+)\s*;?\s*$",
         query,
         re.IGNORECASE,
     )
-    if truncate_table_match:
-        handle_truncate_table(truncate_table_match, session, state)
-        return ResultSet([])
+    if not match:
+        return None
+    handle_truncate_table(match, session, state)
+    return ResultSet([])
 
-    alter_table_match = re.match(
+
+def _handle_alter_table(query, session, state, _parameters):
+    match = re.match(
         r"^\s*ALTER\s+TABLE\s+([\w\.]+)\s+ADD\s+([\w\s,]+)\s+([\w\s,]+)\s*;?\s*$",
         query,
         re.IGNORECASE,
     )
-    if alter_table_match:
-        handle_alter_table(alter_table_match, session, state)
-        return ResultSet([])
+    if not match:
+        return None
+    handle_alter_table(match, session, state)
+    return ResultSet([])
 
-    return f"Error: Unsupported query: {query}"
+
+def _handle_alter_table_with(query, session, state, _parameters):
+    match = re.match(
+        r"^\s*ALTER\s+TABLE\s+([\w\.]+)\s+WITH\s+(.*)\s*;?\s*$",
+        query,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+    handle_alter_table_with(match, session, state)
+    return ResultSet([])
+
+
+def _handle_create_index(query, session, state, _parameters):
+    match = re.match(
+        r"^\s*CREATE\s+(?:CUSTOM\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:([\w]+)\s+)?ON\s+([\w\.]+)\s*\(([^\)]+)\)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    handle_create_index(match, session, state)
+    return ResultSet([])
+
+
+def _handle_drop_index(query, session, state, _parameters):
+    match = re.match(
+        r"^\s*DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([\w\.]+)\s*;?\s*$",
+        query,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    handle_drop_index(match, session, state)
+    return ResultSet([])

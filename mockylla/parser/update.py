@@ -31,10 +31,13 @@ def handle_update(update_match, session, state, parameters=None):
     """Handle UPDATE query by parsing and executing the update operation."""
     (
         table_name_full,
+        using_clause,
         set_clause_str,
         where_clause_str,
         if_exists,
     ) = update_match.groups()
+
+    del using_clause
 
     if parameters and "%s" in (set_clause_str + where_clause_str):
         set_clause_str, next_idx = replace_placeholders(

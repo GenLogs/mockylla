@@ -1,3 +1,5 @@
+from cassandra import InvalidRequest
+
 from .utils import get_table, parse_where_clause, check_row_conditions
 from mockylla.row import Row
 
@@ -66,10 +68,10 @@ def __apply_order_by(filtered_data, order_by_clause_str, schema):
     order_dir = parts[1].upper() if len(parts) > 1 else "ASC"
 
     if order_dir not in ["ASC", "DESC"]:
-        raise Exception(f"Invalid ORDER BY direction: {order_dir}")
+        raise InvalidRequest(f"Invalid ORDER BY direction: {order_dir}")
 
     if filtered_data and order_col not in schema:
-        raise Exception(
+        raise InvalidRequest(
             f"Column '{order_col}' in ORDER BY not found in table schema"
         )
 

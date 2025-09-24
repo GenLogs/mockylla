@@ -1,4 +1,7 @@
 import re
+
+from cassandra import InvalidRequest
+
 from mockylla.parser.utils import cast_value
 from mockylla.row import Row
 
@@ -67,26 +70,30 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         table_name_full,
         columns_str,
         values_str,
+        using_clause,
         if_not_exists,
     ) = insert_match.groups()
+
+    del using_clause
 
     if "." in table_name_full:
         keyspace_name, table_name = table_name_full.split(".", 1)
     elif session.keyspace:
         keyspace_name, table_name = session.keyspace, table_name_full
     else:
-        raise Exception("No keyspace specified for INSERT")
+        raise InvalidRequest("No keyspace specified for INSERT")
 
-    table_info = state.keyspaces[keyspace_name]["tables"][table_name]
+    if keyspace_name not in state.keyspaces:
+        raise InvalidRequest(f"Keyspace '{keyspace_name}' does not exist")
+
+    tables = state.keyspaces[keyspace_name]["tables"]
+    if table_name not in tables:
+        raise InvalidRequest(f"Table '{table_name_full}' does not exist")
+
+    table_info = tables[table_name]
     table_schema = table_info["schema"]
     primary_key_cols = table_info.get("primary_key", [])
     defined_types = state.keyspaces[keyspace_name].get("types", {})
-
-    if (
-        keyspace_name not in state.keyspaces
-        or table_name not in state.keyspaces[keyspace_name]["tables"]
-    ):
-        raise Exception(f"Table '{table_name_full}' does not exist")
 
     columns = [c.strip() for c in columns_str.split(",")]
 
@@ -96,7 +103,9 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         values = _parse_values(values_str)
 
     if len(columns) != len(values):
-        raise Exception("Number of columns does not match number of values")
+        raise InvalidRequest(
+            "Number of columns does not match number of values"
+        )
 
     row_data = {}
     for col, val in zip(columns, values):
