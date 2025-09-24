@@ -102,6 +102,37 @@ def test_select_with_compound_where_clause():
 
 
 @mock_scylladb
+def test_select_with_allow_filtering():
+    cluster = Cluster(["127.0.0.1"])
+    session = cluster.connect()
+    keyspace_name = "allow_keyspace"
+    table_name = "allow_table"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
+    )
+    session.set_keyspace(keyspace_name)
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text, city text)"
+    )
+
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, city) VALUES (1, 'Alice', 'Paris')"
+    )
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, city) VALUES (2, 'Bob', 'Rome')"
+    )
+
+    result = session.execute(
+        f"SELECT * FROM {table_name} WHERE city = 'Paris' ALLOW FILTERING"
+    )
+    rows = list(result)
+
+    assert len(rows) == 1
+    assert rows[0] == {"id": 1, "name": "Alice", "city": "Paris"}
+
+
+@mock_scylladb
 def test_select_count_star():
     cluster = Cluster(["127.0.0.1"])
     session = cluster.connect()
@@ -116,12 +147,8 @@ def test_select_count_star():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
     )
 
-    session.execute(
-        f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')"
-    )
-    session.execute(
-        f"INSERT INTO {table_name} (id, name) VALUES (2, 'Bob')"
-    )
+    session.execute(f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')")
+    session.execute(f"INSERT INTO {table_name} (id, name) VALUES (2, 'Bob')")
 
     result = session.execute(f"SELECT COUNT(*) FROM {table_name}")
     row = result.one()
@@ -147,9 +174,7 @@ def test_select_count_star_alias():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, value text)"
     )
 
-    session.execute(
-        f"INSERT INTO {table_name} (id, value) VALUES (1, 'one')"
-    )
+    session.execute(f"INSERT INTO {table_name} (id, value) VALUES (1, 'one')")
 
     result = session.execute(f"SELECT COUNT(*) AS total FROM {table_name}")
     row = result.one()
@@ -180,9 +205,7 @@ def test_select_count_column():
     session.execute(
         f"INSERT INTO {table_name} (id, age, city) VALUES (2, 25, 'Rome')"
     )
-    session.execute(
-        f"INSERT INTO {table_name} (id, city) VALUES (3, 'Madrid')"
-    )
+    session.execute(f"INSERT INTO {table_name} (id, city) VALUES (3, 'Madrid')")
 
     result = session.execute(f"SELECT COUNT(age) FROM {table_name}")
     row = result.one()
@@ -207,15 +230,9 @@ def test_select_sum_min_max():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, score int)"
     )
 
-    session.execute(
-        f"INSERT INTO {table_name} (id, score) VALUES (1, 10)"
-    )
-    session.execute(
-        f"INSERT INTO {table_name} (id, score) VALUES (2, 40)"
-    )
-    session.execute(
-        f"INSERT INTO {table_name} (id, score) VALUES (3, 5)"
-    )
+    session.execute(f"INSERT INTO {table_name} (id, score) VALUES (1, 10)")
+    session.execute(f"INSERT INTO {table_name} (id, score) VALUES (2, 40)")
+    session.execute(f"INSERT INTO {table_name} (id, score) VALUES (3, 5)")
 
     result = session.execute(
         f"SELECT SUM(score) AS total_score, MIN(score) AS min_score, MAX(score) FROM {table_name}"
@@ -243,9 +260,7 @@ def test_select_aggregate_mixed_columns_error():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, value int)"
     )
 
-    session.execute(
-        f"INSERT INTO {table_name} (id, value) VALUES (1, 5)"
-    )
+    session.execute(f"INSERT INTO {table_name} (id, value) VALUES (1, 5)")
 
     with pytest.raises(InvalidRequest):
         session.execute(f"SELECT COUNT(*) , id FROM {table_name}")
@@ -266,9 +281,7 @@ def test_select_aggregate_with_limit_error():
         f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
     )
 
-    session.execute(
-        f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')"
-    )
+    session.execute(f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')")
 
     with pytest.raises(InvalidRequest):
         session.execute(f"SELECT COUNT(*) FROM {table_name} LIMIT 1")

@@ -120,7 +120,9 @@ def __parse_select_items(columns_str, schema):
     if select_cols_str == "*":
         return [{"type": "wildcard"}]
 
-    raw_items = [part.strip() for part in select_cols_str.split(",") if part.strip()]
+    raw_items = [
+        part.strip() for part in select_cols_str.split(",") if part.strip()
+    ]
     if not raw_items:
         raise InvalidRequest("No columns specified in SELECT clause")
 
@@ -200,7 +202,11 @@ def __compute_aggregate(filtered_data, item):
             return len(filtered_data)
         return sum(1 for row in filtered_data if row.get(argument) is not None)
 
-    values = [row.get(argument) for row in filtered_data if row.get(argument) is not None]
+    values = [
+        row.get(argument)
+        for row in filtered_data
+        if row.get(argument) is not None
+    ]
 
     if func == "sum":
         return sum(values) if values else 0

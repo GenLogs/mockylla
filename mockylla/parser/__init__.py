@@ -151,6 +151,7 @@ def _handle_select(query, session, state, parameters):
             r"(?:\s+WHERE\s+(.*?))?"
             r"(?:\s+ORDER BY\s+(.*?))?"
             r"(?:\s+LIMIT\s+(\d+))?"
+            r"(?:\s+ALLOW\s+FILTERING)?"
             r"\s*;?\s*$"
         ),
         query,
