@@ -94,7 +94,7 @@ def _handle_create_keyspace(query, _session, state, _parameters):
 
 def _handle_create_table(query, session, state, _parameters):
     match = re.match(
-        r"^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*(?:WITH\s+(.*))?\s*;?\s*$",
+        r"^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s*\((.*?)\)\s*(?:WITH\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )

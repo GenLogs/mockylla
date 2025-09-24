@@ -92,7 +92,15 @@ def handle_insert_into(insert_match, session, state, parameters=None):
 
     table_info = tables[table_name]
     table_schema = table_info["schema"]
-    primary_key_cols = table_info.get("primary_key", [])
+    primary_key_info = table_info.get("primary_key", [])
+    if isinstance(primary_key_info, dict):
+        primary_key_cols = primary_key_info.get("all")
+        if primary_key_cols is None:
+            primary_key_cols = primary_key_info.get(
+                "partition", []
+            ) + primary_key_info.get("clustering", [])
+    else:
+        primary_key_cols = primary_key_info
     defined_types = state.keyspaces[keyspace_name].get("types", {})
 
     columns = [c.strip() for c in columns_str.split(",")]
