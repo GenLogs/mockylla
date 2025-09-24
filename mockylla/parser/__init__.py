@@ -134,7 +134,7 @@ def _handle_create_materialized_view(query, session, state, _parameters):
 
 def _handle_insert(query, session, state, parameters):
     match = re.match(
-        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(?:USING\s+(.*?))?\s*(IF\s+NOT\s+EXISTS)?\s*;?\s*$",
+        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(?:USING\s+(.*?))?(?:\s+IF\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -167,7 +167,7 @@ def _handle_select(query, session, state, parameters):
 
 def _handle_update(query, session, state, parameters):
     match = re.match(
-        r"^\s*UPDATE\s+([\w\.]+)(?:\s+USING\s+(.*?))?\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF\s+EXISTS)?\s*;?\s*$",
+        r"^\s*UPDATE\s+([\w\.]+)(?:\s+USING\s+(.*?))?\s+SET\s+(.*)\s+WHERE\s+(.*?)(?:\s+IF\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -179,7 +179,7 @@ def _handle_update(query, session, state, parameters):
 
 def _handle_delete(query, session, state, parameters):
     match = re.match(
-        r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
+        r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)(?:\s+IF\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE,
     )

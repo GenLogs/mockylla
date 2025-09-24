@@ -7,6 +7,8 @@ from decimal import Decimal
 
 from cassandra import InvalidRequest
 
+from mockylla.row import Row
+
 
 def cast_value(value, cql_type):
     """Casts a value to a Python type based on CQL type."""
@@ -421,6 +423,44 @@ def row_write_timestamp(row):
     if not isinstance(meta, dict):
         return float("-inf")
     return meta.get("timestamp", float("-inf"))
+
+
+def build_lwt_result(applied, row=None):
+    """Construct a Row representing an LWT result."""
+
+    if row is None or not isinstance(row, dict):
+        return Row(["[applied]"], [applied])
+
+    visible_items = [
+        (key, value) for key, value in row.items() if not key.startswith("__")
+    ]
+    names = ["[applied]"] + [key for key, _ in visible_items]
+    values = [applied] + [value for _, value in visible_items]
+    return Row(names, values)
+
+
+def parse_lwt_clause(if_clause, schema):
+    """Parse an IF clause returning its mode and parsed conditions."""
+
+    if if_clause is None:
+        return {"type": "none", "conditions": []}
+
+    clause = if_clause.strip()
+    if not clause:
+        return {"type": "none", "conditions": []}
+
+    normalised = clause.rstrip(";")
+    keyword = normalised.upper()
+
+    if keyword == "NOT EXISTS":
+        return {"type": "if_not_exists", "conditions": []}
+    if keyword == "EXISTS":
+        return {"type": "if_exists", "conditions": []}
+
+    conditions = parse_where_clause(normalised, schema)
+    if not conditions:
+        raise InvalidRequest("Unsupported IF clause")
+    return {"type": "conditions", "conditions": conditions}
 
 
 def parse_using_options(using_clause):

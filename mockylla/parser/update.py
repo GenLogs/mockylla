@@ -5,15 +5,17 @@ from cassandra import InvalidRequest
 
 from mockylla.parser.utils import (
     apply_write_metadata,
+    build_lwt_result,
     cast_value,
+    check_row_conditions,
     current_timestamp_microseconds,
     get_table,
+    parse_lwt_clause,
     parse_using_options,
     parse_where_clause,
     purge_expired_rows,
     row_write_timestamp,
 )
-from mockylla.row import Row
 
 
 def replace_placeholders(segment, params, start_idx):
@@ -43,7 +45,7 @@ def handle_update(update_match, session, state, parameters=None):
         using_clause,
         set_clause_str,
         where_clause_str,
-        if_exists,
+        if_clause,
     ) = update_match.groups()
 
     ttl_value, ttl_provided, timestamp_value, timestamp_provided = (
@@ -69,6 +71,16 @@ def handle_update(update_match, session, state, parameters=None):
     )
     parsed_conditions = parse_where_clause(where_clause_str, schema)
 
+    clause_info = parse_lwt_clause(if_clause, schema)
+    condition_type = clause_info["type"]
+    lwt_conditions = clause_info.get("conditions", [])
+
+    matching_rows = [
+        row
+        for row in table["data"]
+        if __handle_update_check_row(row, parsed_conditions)
+    ]
+
     write_timestamp = (
         timestamp_value
         if timestamp_provided
@@ -78,7 +90,56 @@ def handle_update(update_match, session, state, parameters=None):
     if ttl_provided and ttl_value and ttl_value > 0:
         now_seconds = time.time()
 
-    rows_updated, matched_rows = __update_existing_rows(
+    if condition_type == "if_not_exists":
+        if matching_rows:
+            return [build_lwt_result(False, matching_rows[0])]
+        __handle_upsert(
+            table,
+            table_name,
+            parsed_conditions,
+            set_operations,
+            counter_operations,
+            write_timestamp,
+            ttl_value,
+            ttl_provided,
+            now_seconds,
+        )
+        return [build_lwt_result(True)]
+
+    if condition_type == "if_exists":
+        if not matching_rows:
+            return [build_lwt_result(False)]
+        __update_existing_rows(
+            table,
+            parsed_conditions,
+            set_operations,
+            counter_operations,
+            write_timestamp,
+            ttl_value,
+            ttl_provided,
+            now_seconds,
+        )
+        return [build_lwt_result(True)]
+
+    if condition_type == "conditions":
+        if not matching_rows:
+            return [build_lwt_result(False)]
+        for row in matching_rows:
+            if not check_row_conditions(row, lwt_conditions):
+                return [build_lwt_result(False, row)]
+        __update_existing_rows(
+            table,
+            parsed_conditions,
+            set_operations,
+            counter_operations,
+            write_timestamp,
+            ttl_value,
+            ttl_provided,
+            now_seconds,
+        )
+        return [build_lwt_result(True)]
+
+    rows_updated = __update_existing_rows(
         table,
         parsed_conditions,
         set_operations,
@@ -89,18 +150,11 @@ def handle_update(update_match, session, state, parameters=None):
         now_seconds,
     )
 
-    if if_exists:
-        if rows_updated > 0:
-            print(f"Updated {rows_updated} rows in '{table_name}'")
-            return [Row(["[applied]"], [True])]
-        else:
-            return [Row(["[applied]"], [False])]
-
     if rows_updated > 0:
         print(f"Updated {rows_updated} rows in '{table_name}'")
         return []
 
-    if not matched_rows:
+    if not matching_rows:
         __handle_upsert(
             table,
             table_name,
@@ -155,10 +209,8 @@ def __update_existing_rows(
 ):
     """Update existing rows that match conditions."""
     rows_updated = 0
-    matched = False
     for row in table["data"]:
         if __handle_update_check_row(row, parsed_conditions):
-            matched = True
             existing_ts = row_write_timestamp(row)
             if write_timestamp < existing_ts:
                 continue
@@ -173,7 +225,7 @@ def __update_existing_rows(
                 now=now_seconds,
             )
             rows_updated += 1
-    return rows_updated, matched
+    return rows_updated
 
 
 def __handle_upsert(

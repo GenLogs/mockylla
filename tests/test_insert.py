@@ -79,3 +79,45 @@ def test_insert_if_not_exists():
     success_row = result_success.one()
     assert success_row["[applied]"] is True
     assert len(get_table_rows(keyspace_name, table_name)) == 2
+
+
+@mock_scylladb
+def test_insert_if_condition():
+    cluster = Cluster(["127.0.0.1"])
+    session = cluster.connect()
+    keyspace_name = "my_app"
+    table_name = "users"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} "
+        "WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1}"
+    )
+    session.set_keyspace(keyspace_name)
+    session.execute(
+        f"CREATE TABLE {table_name} (user_id int PRIMARY KEY, name text, email text)"
+    )
+
+    session.execute(
+        f"INSERT INTO {table_name} (user_id, name, email) VALUES (1, 'Alice', 'alice@example.com')"
+    )
+
+    result_success = session.execute(
+        f"INSERT INTO {table_name} (user_id, name, email) VALUES (1, 'Bob', 'bob@example.com') IF name = 'Alice'"
+    )
+    assert result_success.one()["[applied]"] is True
+
+    result_fail = session.execute(
+        f"INSERT INTO {table_name} (user_id, name, email) VALUES (1, 'Charlie', 'charlie@example.com') IF name = 'Alice'"
+    )
+    failure_row = result_fail.one()
+    assert failure_row["[applied]"] is False
+    assert failure_row["name"] == "Bob"
+
+    result_missing = session.execute(
+        f"INSERT INTO {table_name} (user_id, name, email) VALUES (2, 'Dana', 'dana@example.com') IF name = 'Alice'"
+    )
+    assert result_missing.one()["[applied]"] is False
+
+    rows = get_table_rows(keyspace_name, table_name)
+    assert any(row["name"] == "Bob" for row in rows)
+    assert not any(row["name"] == "Charlie" for row in rows)
