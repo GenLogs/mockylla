@@ -1,5 +1,7 @@
 from cassandra import InvalidRequest
 
+from mockylla.parser.utils import purge_expired_rows
+
 
 def _resolve_primary_key_components(table_info):
     """Return partition, clustering, and combined primary key components."""
@@ -319,7 +321,9 @@ def get_table_rows(keyspace_name, table_name):
         raise InvalidRequest(
             f"Table '{table_name}' does not exist in keyspace '{keyspace_name}'."
         )
-    return tables[table_name]["data"]
+    table_info = tables[table_name]
+    purge_expired_rows(table_info)
+    return table_info["data"]
 
 
 def get_types(keyspace_name):

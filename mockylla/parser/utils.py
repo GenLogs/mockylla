@@ -1,5 +1,6 @@
 import ast
 import re
+import time
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -212,6 +213,10 @@ def _cast_uuid(value):
     if isinstance(value, uuid.UUID):
         return value
     val = _strip_quotes(value)
+    if isinstance(val, str):
+        lowered = val.lower()
+        if lowered in {"uuid()", "now()"}:
+            return uuid.uuid4()
     try:
         return uuid.UUID(str(val))
     except (ValueError, AttributeError, TypeError):
@@ -347,3 +352,120 @@ _CASTERS = {
     "date": _cast_date,
     "time": _cast_time,
 }
+
+
+def current_timestamp_microseconds():
+    """Return current wall-clock time in microseconds."""
+
+    return int(time.time() * 1_000_000)
+
+
+def purge_expired_rows(table_info, *, now=None):
+    """Remove rows whose TTL has elapsed from table_info in-place."""
+
+    if not table_info:
+        return
+
+    rows = table_info.get("data")
+    if not rows:
+        return
+
+    now = time.time() if now is None else now
+    retained = []
+    changed = False
+
+    for row in rows:
+        meta = row.get("__meta") if isinstance(row, dict) else None
+        expires_at = meta.get("expires_at") if meta else None
+        if expires_at is not None and expires_at <= now:
+            changed = True
+            continue
+        retained.append(row)
+
+    if changed:
+        table_info["data"] = retained
+
+
+def apply_write_metadata(
+    row,
+    *,
+    timestamp,
+    ttl_value=None,
+    ttl_provided=False,
+    now=None,
+):
+    """Attach write timestamp and TTL metadata to a row."""
+
+    if not isinstance(row, dict):
+        return
+
+    meta = row.setdefault("__meta", {})
+    meta["timestamp"] = timestamp
+
+    if ttl_provided:
+        now = time.time() if now is None else now
+        if ttl_value is None or ttl_value <= 0:
+            meta.pop("expires_at", None)
+            meta.pop("ttl", None)
+        else:
+            meta["ttl"] = ttl_value
+            meta["expires_at"] = now + ttl_value
+
+
+def row_write_timestamp(row):
+    """Return the stored write timestamp for a row (or -inf if missing)."""
+
+    if not isinstance(row, dict):
+        return float("-inf")
+    meta = row.get("__meta")
+    if not isinstance(meta, dict):
+        return float("-inf")
+    return meta.get("timestamp", float("-inf"))
+
+
+def parse_using_options(using_clause):
+    """Parse a USING clause into TTL and TIMESTAMP components.
+
+    Supports simple literal forms such as ``TTL 60`` or
+    ``TTL 60 AND TIMESTAMP 12345``.
+    """
+
+    if not using_clause:
+        return None, False, None, False
+
+    clause = using_clause.strip()
+    if not clause:
+        return None, False, None, False
+
+    parts = re.split(r"\s+AND\s+", clause, flags=re.IGNORECASE)
+    ttl_value = None
+    ttl_provided = False
+    timestamp_value = None
+    timestamp_provided = False
+
+    for part in parts:
+        token = part.strip()
+        if not token:
+            continue
+        match = re.match(r"(?i)^(TTL|TIMESTAMP)\s+(.+)$", token)
+        if not match:
+            continue
+        keyword, value = match.groups()
+        keyword = keyword.upper()
+        value = value.strip()
+
+        try:
+            numeric_value = int(value)
+        except ValueError:
+            raise InvalidRequest(
+                f"Unsupported USING clause value '{value}'"
+            ) from None
+
+        if keyword == "TTL":
+            ttl_value = numeric_value
+            ttl_provided = True
+        elif keyword == "TIMESTAMP":
+            timestamp_value = numeric_value
+            timestamp_provided = True
+
+    return ttl_value, ttl_provided, timestamp_value, timestamp_provided

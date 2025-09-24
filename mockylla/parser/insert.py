@@ -1,8 +1,16 @@
 import re
+import time
 
 from cassandra import InvalidRequest
 
-from mockylla.parser.utils import cast_value
+from mockylla.parser.utils import (
+    apply_write_metadata,
+    cast_value,
+    current_timestamp_microseconds,
+    parse_using_options,
+    purge_expired_rows,
+    row_write_timestamp,
+)
 from mockylla.row import Row
 
 
@@ -74,8 +82,6 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         if_not_exists,
     ) = insert_match.groups()
 
-    del using_clause
-
     if "." in table_name_full:
         keyspace_name, table_name = table_name_full.split(".", 1)
     elif session.keyspace:
@@ -91,6 +97,7 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         raise InvalidRequest(f"Table '{table_name_full}' does not exist")
 
     table_info = tables[table_name]
+    purge_expired_rows(table_info)
     table_schema = table_info["schema"]
     primary_key_info = table_info.get("primary_key", [])
     if isinstance(primary_key_info, dict):
@@ -102,6 +109,21 @@ def handle_insert_into(insert_match, session, state, parameters=None):
     else:
         primary_key_cols = primary_key_info
     defined_types = state.keyspaces[keyspace_name].get("types", {})
+
+    ttl_value, ttl_provided, timestamp_value, timestamp_provided = (
+        parse_using_options(using_clause)
+    )
+    if ttl_value is not None and ttl_value < 0:
+        raise InvalidRequest("TTL value must be >= 0")
+
+    write_timestamp = (
+        timestamp_value
+        if timestamp_provided
+        else current_timestamp_microseconds()
+    )
+    now_seconds = None
+    if ttl_provided and ttl_value and ttl_value > 0:
+        now_seconds = time.time()
 
     columns = [c.strip() for c in columns_str.split(",")]
 
@@ -120,6 +142,8 @@ def handle_insert_into(insert_match, session, state, parameters=None):
         cql_type = table_schema.get(col)
         row_data[col] = assign_row_data_value(val, cql_type, defined_types)
 
+    pk_values = {k: row_data.get(k) for k in primary_key_cols or []}
+
     if if_not_exists:
         pk_to_insert = {
             k: v for k, v in row_data.items() if k in primary_key_cols
@@ -130,17 +154,61 @@ def handle_insert_into(insert_match, session, state, parameters=None):
                 k: v for k, v in existing_row.items() if k in primary_key_cols
             }
             if pk_to_insert == pk_existing:
-                result_names = ["[applied]"] + list(existing_row.keys())
-                result_values = [False] + list(existing_row.values())
+                visible_columns = [
+                    col
+                    for col in existing_row.keys()
+                    if not col.startswith("__")
+                ]
+                result_names = ["[applied]"] + visible_columns
+                result_values = [False] + [
+                    existing_row[col] for col in visible_columns
+                ]
                 return [Row(result_names, result_values)]
 
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
-            row_data
+        new_row = dict(row_data)
+        apply_write_metadata(
+            new_row,
+            timestamp=write_timestamp,
+            ttl_value=ttl_value,
+            ttl_provided=ttl_provided,
+            now=now_seconds,
         )
+        table_info["data"].append(new_row)
         return [Row(["[applied]"], [True])]
     else:
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"].append(
-            row_data
-        )
+        new_row = dict(row_data)
+        existing = None
+        for candidate in table_info["data"]:
+            if all(
+                candidate.get(k) == pk_values.get(k) for k in primary_key_cols
+            ):
+                existing = candidate
+                break
+
+        if existing is not None:
+            existing_ts = row_write_timestamp(existing)
+            if write_timestamp < existing_ts:
+                return []
+            previous_meta = existing.get("__meta") if not ttl_provided else None
+            existing.clear()
+            existing.update(new_row)
+            if previous_meta is not None:
+                existing["__meta"] = previous_meta
+            apply_write_metadata(
+                existing,
+                timestamp=write_timestamp,
+                ttl_value=ttl_value,
+                ttl_provided=ttl_provided,
+                now=now_seconds,
+            )
+        else:
+            apply_write_metadata(
+                new_row,
+                timestamp=write_timestamp,
+                ttl_value=ttl_value,
+                ttl_provided=ttl_provided,
+                now=now_seconds,
+            )
+            table_info["data"].append(new_row)
         print(f"Inserted row into '{table_name}': {row_data}")
         return []

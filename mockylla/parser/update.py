@@ -1,8 +1,17 @@
 import re
+import time
+
+from cassandra import InvalidRequest
+
 from mockylla.parser.utils import (
-    get_table,
-    parse_where_clause,
+    apply_write_metadata,
     cast_value,
+    current_timestamp_microseconds,
+    get_table,
+    parse_using_options,
+    parse_where_clause,
+    purge_expired_rows,
+    row_write_timestamp,
 )
 from mockylla.row import Row
 
@@ -37,7 +46,11 @@ def handle_update(update_match, session, state, parameters=None):
         if_exists,
     ) = update_match.groups()
 
-    del using_clause
+    ttl_value, ttl_provided, timestamp_value, timestamp_provided = (
+        parse_using_options(using_clause)
+    )
+    if ttl_value is not None and ttl_value < 0:
+        raise InvalidRequest("TTL value must be >= 0")
 
     if parameters and "%s" in (set_clause_str + where_clause_str):
         set_clause_str, next_idx = replace_placeholders(
@@ -49,14 +62,31 @@ def handle_update(update_match, session, state, parameters=None):
 
     _, table_name, table = get_table(table_name_full, session, state)
     schema = table["schema"]
+    purge_expired_rows(table)
 
     set_operations, counter_operations = __parse_set_clause(
         set_clause_str, schema
     )
     parsed_conditions = parse_where_clause(where_clause_str, schema)
 
-    rows_updated = __update_existing_rows(
-        table, parsed_conditions, set_operations, counter_operations
+    write_timestamp = (
+        timestamp_value
+        if timestamp_provided
+        else current_timestamp_microseconds()
+    )
+    now_seconds = None
+    if ttl_provided and ttl_value and ttl_value > 0:
+        now_seconds = time.time()
+
+    rows_updated, matched_rows = __update_existing_rows(
+        table,
+        parsed_conditions,
+        set_operations,
+        counter_operations,
+        write_timestamp,
+        ttl_value,
+        ttl_provided,
+        now_seconds,
     )
 
     if if_exists:
@@ -70,9 +100,18 @@ def handle_update(update_match, session, state, parameters=None):
         print(f"Updated {rows_updated} rows in '{table_name}'")
         return []
 
-    __handle_upsert(
-        table, table_name, parsed_conditions, set_operations, counter_operations
-    )
+    if not matched_rows:
+        __handle_upsert(
+            table,
+            table_name,
+            parsed_conditions,
+            set_operations,
+            counter_operations,
+            write_timestamp,
+            ttl_value,
+            ttl_provided,
+            now_seconds,
+        )
     return []
 
 
@@ -105,21 +144,48 @@ def __parse_set_clause(set_clause_str, schema):
 
 
 def __update_existing_rows(
-    table, parsed_conditions, set_operations, counter_operations
+    table,
+    parsed_conditions,
+    set_operations,
+    counter_operations,
+    write_timestamp,
+    ttl_value,
+    ttl_provided,
+    now_seconds,
 ):
     """Update existing rows that match conditions."""
     rows_updated = 0
+    matched = False
     for row in table["data"]:
         if __handle_update_check_row(row, parsed_conditions):
+            matched = True
+            existing_ts = row_write_timestamp(row)
+            if write_timestamp < existing_ts:
+                continue
             row.update(set_operations)
             for col, val in counter_operations.items():
                 row[col] = row.get(col, 0) + val
+            apply_write_metadata(
+                row,
+                timestamp=write_timestamp,
+                ttl_value=ttl_value,
+                ttl_provided=ttl_provided,
+                now=now_seconds,
+            )
             rows_updated += 1
-    return rows_updated
+    return rows_updated, matched
 
 
 def __handle_upsert(
-    table, table_name, parsed_conditions, set_operations, counter_operations
+    table,
+    table_name,
+    parsed_conditions,
+    set_operations,
+    counter_operations,
+    write_timestamp,
+    ttl_value,
+    ttl_provided,
+    now_seconds,
 ):
     """Handle upsert case when no existing rows were updated."""
     new_row = {}
@@ -136,6 +202,13 @@ def __handle_upsert(
     for col, val in counter_operations.items():
         new_row[col] = val
 
+    apply_write_metadata(
+        new_row,
+        timestamp=write_timestamp,
+        ttl_value=ttl_value,
+        ttl_provided=ttl_provided,
+        now=now_seconds,
+    )
     table["data"].append(new_row)
     print(f"Upserted row in '{table_name}': {new_row}")
 

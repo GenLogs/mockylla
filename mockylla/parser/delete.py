@@ -1,7 +1,8 @@
 from mockylla.parser.utils import (
+    check_row_conditions,
     get_table,
     parse_where_clause,
-    check_row_conditions,
+    purge_expired_rows,
 )
 from mockylla.row import Row
 
@@ -12,6 +13,7 @@ def handle_delete_from(delete_match, session, state, parameters=None):
     keyspace_name, table_name, table_info = get_table(
         table_name_full, session, state
     )
+    purge_expired_rows(table_info)
     table_data = table_info["data"]
     schema = table_info["schema"]
 
