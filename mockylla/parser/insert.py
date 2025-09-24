@@ -3,6 +3,7 @@ import time
 
 from cassandra import InvalidRequest
 
+from mockylla.parser.materialized_view import rebuild_materialized_views
 from mockylla.parser.utils import (
     apply_write_metadata,
     build_lwt_result,
@@ -172,6 +173,7 @@ def handle_insert_into(insert_match, session, state, parameters=None):
             now=now_seconds,
         )
         table_info["data"].append(new_row)
+        rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     if condition_type == "if_exists":
@@ -192,6 +194,7 @@ def handle_insert_into(insert_match, session, state, parameters=None):
             ttl_provided=ttl_provided,
             now=now_seconds,
         )
+        rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     if condition_type == "conditions":
@@ -214,6 +217,7 @@ def handle_insert_into(insert_match, session, state, parameters=None):
             ttl_provided=ttl_provided,
             now=now_seconds,
         )
+        rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     if existing is not None:
@@ -241,5 +245,6 @@ def handle_insert_into(insert_match, session, state, parameters=None):
             now=now_seconds,
         )
         table_info["data"].append(new_row)
+    rebuild_materialized_views(state, keyspace_name, table_name)
     print(f"Inserted row into '{table_name}': {row_data}")
     return []

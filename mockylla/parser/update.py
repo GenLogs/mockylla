@@ -3,6 +3,7 @@ import time
 
 from cassandra import InvalidRequest
 
+from mockylla.parser.materialized_view import rebuild_materialized_views
 from mockylla.parser.utils import (
     apply_write_metadata,
     build_lwt_result,
@@ -62,7 +63,9 @@ def handle_update(update_match, session, state, parameters=None):
             where_clause_str, parameters, next_idx
         )
 
-    _, table_name, table = get_table(table_name_full, session, state)
+    keyspace_name, table_name, table = get_table(
+        table_name_full, session, state
+    )
     schema = table["schema"]
     purge_expired_rows(table)
 
@@ -104,12 +107,13 @@ def handle_update(update_match, session, state, parameters=None):
             ttl_provided,
             now_seconds,
         )
+        rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     if condition_type == "if_exists":
         if not matching_rows:
             return [build_lwt_result(False)]
-        __update_existing_rows(
+        rows_updated = __update_existing_rows(
             table,
             parsed_conditions,
             set_operations,
@@ -119,6 +123,8 @@ def handle_update(update_match, session, state, parameters=None):
             ttl_provided,
             now_seconds,
         )
+        if rows_updated > 0:
+            rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     if condition_type == "conditions":
@@ -127,7 +133,7 @@ def handle_update(update_match, session, state, parameters=None):
         for row in matching_rows:
             if not check_row_conditions(row, lwt_conditions):
                 return [build_lwt_result(False, row)]
-        __update_existing_rows(
+        rows_updated = __update_existing_rows(
             table,
             parsed_conditions,
             set_operations,
@@ -137,6 +143,8 @@ def handle_update(update_match, session, state, parameters=None):
             ttl_provided,
             now_seconds,
         )
+        if rows_updated > 0:
+            rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     rows_updated = __update_existing_rows(
@@ -152,6 +160,7 @@ def handle_update(update_match, session, state, parameters=None):
 
     if rows_updated > 0:
         print(f"Updated {rows_updated} rows in '{table_name}'")
+        rebuild_materialized_views(state, keyspace_name, table_name)
         return []
 
     if not matching_rows:
@@ -166,6 +175,7 @@ def handle_update(update_match, session, state, parameters=None):
             ttl_provided,
             now_seconds,
         )
+        rebuild_materialized_views(state, keyspace_name, table_name)
     return []
 
 

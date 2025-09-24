@@ -197,7 +197,10 @@ def _cast_decimal(value):
 
 
 def _cast_text(value):
-    return str(_strip_quotes(value))
+    stripped = _strip_quotes(value)
+    if isinstance(stripped, str) and stripped.lower() == "null":
+        return None
+    return str(stripped)
 
 
 def _cast_bool(value):

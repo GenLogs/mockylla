@@ -1,3 +1,4 @@
+from mockylla.parser.materialized_view import rebuild_materialized_views
 from mockylla.parser.utils import (
     build_lwt_result,
     check_row_conditions,
@@ -64,6 +65,7 @@ def handle_delete_from(delete_match, session, state, parameters=None):
             rows_to_keep
         )
         print(f"Deleted {deleted_count} rows from '{table_name}'")
+        rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     if condition_type == "conditions":
@@ -76,6 +78,7 @@ def handle_delete_from(delete_match, session, state, parameters=None):
             rows_to_keep
         )
         print(f"Deleted {deleted_count} rows from '{table_name}'")
+        rebuild_materialized_views(state, keyspace_name, table_name)
         return [build_lwt_result(True)]
 
     if deleted_count > 0:
@@ -83,5 +86,6 @@ def handle_delete_from(delete_match, session, state, parameters=None):
             rows_to_keep
         )
         print(f"Deleted {deleted_count} rows from '{table_name}'")
+        rebuild_materialized_views(state, keyspace_name, table_name)
 
     return []
