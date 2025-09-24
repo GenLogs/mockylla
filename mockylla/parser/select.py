@@ -6,6 +6,29 @@ from .utils import get_table, parse_where_clause, check_row_conditions
 from mockylla.row import Row
 
 
+_AGG_SELECT_PATTERN = re.compile(
+    r"(count|sum|min|max|avg)\s*\(\s*(distinct\s+)?([^\s\)]+)\s*\)\s*(?:as\s+(\w+)|(\w+))?",
+    re.IGNORECASE,
+)
+
+_FUNCTION_SELECT_PATTERN = re.compile(
+    r"(writetime|ttl)\s*\(\s*(\w+)\s*\)\s*(?:as\s+(\w+)|(\w+))?",
+    re.IGNORECASE,
+)
+
+_COLUMN_SELECT_PATTERN = re.compile(
+    r"(\w+)(?:\s+AS\s+(\w+))?",
+    re.IGNORECASE,
+)
+
+_HAVING_SPLIT_PATTERN = re.compile(r"\s+AND\s+", re.IGNORECASE)
+
+_HAVING_PATTERN = re.compile(
+    r"(count|sum|min|max|avg)\s*\(\s*(distinct\s+)?([^\s\)]+)\s*\)\s*(=|!=|>=|<=|>|<)\s*(.+)",
+    re.IGNORECASE,
+)
+
+
 def handle_select_from(select_match, session, state, parameters=None):
     (
         columns_str,
@@ -17,37 +40,10 @@ def handle_select_from(select_match, session, state, parameters=None):
         limit_str,
     ) = select_match.groups()
 
-    positional_parameters = []
-    named_parameters = {}
-    if parameters is not None:
-        if isinstance(parameters, dict):
-            named_parameters = parameters
-        elif isinstance(parameters, (list, tuple)):
-            positional_parameters = list(parameters)
-        else:
-            positional_parameters = list(parameters)
-
-    if where_clause_str and "%s" in where_clause_str:
-        if not positional_parameters:
-            raise ValueError(
-                "Positional parameters required for WHERE clause placeholders"
-            )
-
-        query_parts = where_clause_str.split("%s")
-        placeholder_count = len(query_parts) - 1
-        if placeholder_count > len(positional_parameters):
-            raise ValueError(
-                "Number of parameters does not match number of placeholders in WHERE clause"
-            )
-
-        final_where = query_parts[0]
-        for i in range(placeholder_count):
-            param = positional_parameters[i]
-            param_str = f"'{param}'" if isinstance(param, str) else str(param)
-            final_where += param_str + query_parts[i + 1]
-
-        where_clause_str = final_where
-        positional_parameters = positional_parameters[placeholder_count:]
+    positional_parameters, named_parameters = __normalize_parameters(parameters)
+    where_clause_str, positional_parameters = __substitute_where_placeholders(
+        where_clause_str, positional_parameters
+    )
 
     limit_value, positional_parameters = __resolve_limit_value(
         limit_str, positional_parameters, named_parameters
@@ -57,77 +53,247 @@ def handle_select_from(select_match, session, state, parameters=None):
     table_data = table_info["data"]
     schema = table_info["schema"]
 
+    columns_str, is_distinct = __extract_distinct_clause(columns_str)
+
+    select_items, group_by_columns, having_conditions = (
+        __parse_select_components(
+            columns_str, group_by_clause_str, having_clause_str, schema
+        )
+    )
+    select_flags = __compute_select_flags(select_items)
+
+    __validate_select_configuration(
+        select_items,
+        group_by_columns,
+        having_conditions,
+        order_by_clause_str,
+        is_distinct,
+        select_flags,
+    )
+
+    filtered_data = __apply_where_filters(table_data, where_clause_str, schema)
+
+    result_set = __execute_select_query(
+        filtered_data,
+        select_items,
+        schema,
+        select_flags,
+        group_by_columns,
+        having_conditions,
+        order_by_clause_str,
+        limit_value,
+        is_distinct,
+        limit_str is not None,
+    )
+
+    print(f"Selected {len(result_set)} rows from '{table_name}'")
+    return result_set
+
+
+def __normalize_parameters(parameters):
+    """Split provided parameters into positional and named collections."""
+    if parameters is None:
+        return [], {}
+
+    if isinstance(parameters, dict):
+        return [], parameters
+
+    if isinstance(parameters, (list, tuple)):
+        return list(parameters), {}
+
+    return list(parameters), {}
+
+
+def __substitute_where_placeholders(where_clause_str, positional_parameters):
+    """Inline positional parameters into WHERE clause placeholders."""
+    if not where_clause_str or "%s" not in where_clause_str:
+        return where_clause_str, positional_parameters
+
+    if not positional_parameters:
+        raise ValueError(
+            "Positional parameters required for WHERE clause placeholders"
+        )
+
+    query_parts = where_clause_str.split("%s")
+    placeholder_count = len(query_parts) - 1
+    if placeholder_count > len(positional_parameters):
+        raise ValueError(
+            "Number of parameters does not match number of placeholders in WHERE clause"
+        )
+
+    final_where = query_parts[0]
+    for index in range(placeholder_count):
+        param = positional_parameters[index]
+        param_str = f"'{param}'" if isinstance(param, str) else str(param)
+        final_where += param_str + query_parts[index + 1]
+
+    remaining_parameters = positional_parameters[placeholder_count:]
+    return final_where, remaining_parameters
+
+
+def __extract_distinct_clause(columns_str):
+    """Determine DISTINCT usage and return the cleaned columns clause."""
     columns_clause = columns_str.strip()
-    is_distinct = False
     lowered = columns_clause.lower()
+
     if lowered.startswith("distinct "):
-        is_distinct = True
-        columns_clause = columns_clause[8:].lstrip()
-    elif lowered == "distinct":
+        return columns_clause[8:].lstrip(), True
+    if lowered == "distinct":
         raise InvalidRequest("SELECT DISTINCT requires at least one column")
 
-    columns_str = columns_clause
+    return columns_clause, False
 
+
+def __parse_select_components(
+    columns_str, group_by_clause_str, having_clause_str, schema
+):
+    """Parse SELECT, GROUP BY, and HAVING clauses for the query."""
     select_items = __parse_select_items(columns_str, schema)
     group_by_columns = __parse_group_by(group_by_clause_str, schema)
     having_conditions = __parse_having_conditions(
         having_clause_str, schema, group_by_columns
     )
+    return select_items, group_by_columns, having_conditions
 
-    has_aggregates = any(item["type"] == "aggregate" for item in select_items)
-    has_columns = any(item["type"] == "column" for item in select_items)
-    has_wildcard = any(item["type"] == "wildcard" for item in select_items)
-    has_functions = any(item["type"] == "function" for item in select_items)
 
+def __compute_select_flags(select_items):
+    """Collect common boolean flags from parsed SELECT items."""
+    return {
+        "has_aggregates": any(
+            item["type"] == "aggregate" for item in select_items
+        ),
+        "has_columns": any(item["type"] == "column" for item in select_items),
+        "has_wildcard": any(
+            item["type"] == "wildcard" for item in select_items
+        ),
+        "has_functions": any(
+            item["type"] == "function" for item in select_items
+        ),
+    }
+
+
+def __validate_select_configuration(
+    select_items,
+    group_by_columns,
+    having_conditions,
+    order_by_clause_str,
+    is_distinct,
+    select_flags,
+):
+    """Ensure the parsed SELECT request follows Cassandra CQL rules."""
+    has_aggregates = select_flags["has_aggregates"]
+    has_columns = select_flags["has_columns"]
+    has_wildcard = select_flags["has_wildcard"]
+    has_functions = select_flags["has_functions"]
+
+    __validate_wildcard_usage(
+        has_wildcard, has_aggregates, group_by_columns, is_distinct
+    )
+    __validate_distinct_usage(is_distinct, has_aggregates, group_by_columns)
+    __validate_function_usage(
+        has_functions, has_aggregates, group_by_columns, is_distinct
+    )
+    __validate_aggregate_column_mix(
+        has_aggregates, has_columns, group_by_columns
+    )
+    __validate_group_by_having(
+        select_items, group_by_columns, having_conditions
+    )
+    __validate_order_by_usage(
+        has_aggregates, group_by_columns, order_by_clause_str
+    )
+
+
+def __validate_wildcard_usage(
+    has_wildcard, has_aggregates, group_by_columns, is_distinct
+):
+    """Disallow wildcard usage when it conflicts with other clauses."""
     if has_wildcard and (has_aggregates or group_by_columns or is_distinct):
         raise InvalidRequest(
             "SELECT * is not allowed with aggregates, GROUP BY, or DISTINCT"
         )
 
+
+def __validate_distinct_usage(is_distinct, has_aggregates, group_by_columns):
+    """Validate DISTINCT usage alongside aggregates and grouping."""
     if is_distinct and has_aggregates:
         raise InvalidRequest(
             "SELECT DISTINCT cannot be combined with aggregate functions"
         )
 
+    if is_distinct and group_by_columns:
+        raise InvalidRequest("SELECT DISTINCT cannot be used with GROUP BY")
+
+
+def __validate_function_usage(
+    has_functions, has_aggregates, group_by_columns, is_distinct
+):
+    """Ensure special functions appear only in simple SELECT queries."""
     if has_functions and (has_aggregates or group_by_columns or is_distinct):
         raise InvalidRequest(
             "WRITETIME and TTL functions are only supported in simple SELECT queries"
         )
 
+
+def __validate_aggregate_column_mix(
+    has_aggregates, has_columns, group_by_columns
+):
+    """Guard against mixing aggregate and non-aggregate columns improperly."""
     if has_aggregates and has_columns and not group_by_columns:
         raise InvalidRequest(
             "Cannot mix aggregate and non-aggregate columns without GROUP BY"
         )
 
-    if is_distinct and group_by_columns:
-        raise InvalidRequest("SELECT DISTINCT cannot be used with GROUP BY")
 
+def __validate_group_by_having(
+    select_items, group_by_columns, having_conditions
+):
+    """Verify GROUP BY and HAVING clauses are consistent."""
     if group_by_columns:
         __validate_group_by_columns(select_items, group_by_columns)
     elif having_conditions:
         raise InvalidRequest("HAVING clause requires GROUP BY")
 
-    if has_aggregates and group_by_columns and order_by_clause_str:
-        raise InvalidRequest(
-            "ORDER BY is not supported with aggregate functions and GROUP BY"
-        )
 
-    if has_aggregates and not group_by_columns and order_by_clause_str:
+def __validate_order_by_usage(
+    has_aggregates, group_by_columns, order_by_clause_str
+):
+    """Check ORDER BY usage with aggregate or grouped queries."""
+    if has_aggregates and order_by_clause_str:
+        if group_by_columns:
+            raise InvalidRequest(
+                "ORDER BY is not supported with aggregate functions and GROUP BY"
+            )
         raise InvalidRequest(
             "ORDER BY is not supported with aggregate functions"
         )
 
-    filtered_data = __apply_where_filters(table_data, where_clause_str, schema)
+
+def __execute_select_query(
+    filtered_data,
+    select_items,
+    schema,
+    select_flags,
+    group_by_columns,
+    having_conditions,
+    order_by_clause_str,
+    limit_value,
+    is_distinct,
+    limit_present,
+):
+    """Run the appropriate SELECT flow based on the parsed query."""
+    has_aggregates = select_flags["has_aggregates"]
 
     if has_aggregates:
-        if limit_str is not None:
+        if limit_present:
             raise InvalidRequest(
                 "LIMIT is not supported with aggregate functions"
             )
-        result_set = __select_with_aggregates(
+        return __select_with_aggregates(
             filtered_data, select_items, group_by_columns, having_conditions
         )
-    elif group_by_columns:
+
+    if group_by_columns:
         if order_by_clause_str:
             raise InvalidRequest(
                 "ORDER BY is not supported with GROUP BY queries"
@@ -136,31 +302,29 @@ def handle_select_from(select_match, session, state, parameters=None):
             filtered_data, select_items, group_by_columns
         )
         if limit_value is not None:
-            result_set = result_set[:limit_value]
-    else:
-        if is_distinct:
-            if order_by_clause_str:
-                raise InvalidRequest(
-                    "ORDER BY is not supported with SELECT DISTINCT"
-                )
-            result_rows = __select_columns(filtered_data, select_items, schema)
-            result_rows = __deduplicate_rows(result_rows)
-            if limit_value is not None:
-                result_rows = result_rows[:limit_value]
-            result_set = result_rows
-        else:
-            if order_by_clause_str:
-                filtered_data = __apply_order_by(
-                    filtered_data, order_by_clause_str, schema
-                )
+            return result_set[:limit_value]
+        return result_set
 
-            if limit_value is not None:
-                filtered_data = __apply_limit(filtered_data, limit_value)
+    if is_distinct:
+        if order_by_clause_str:
+            raise InvalidRequest(
+                "ORDER BY is not supported with SELECT DISTINCT"
+            )
+        result_rows = __select_columns(filtered_data, select_items, schema)
+        result_rows = __deduplicate_rows(result_rows)
+        if limit_value is not None:
+            result_rows = result_rows[:limit_value]
+        return result_rows
 
-            result_set = __select_columns(filtered_data, select_items, schema)
+    if order_by_clause_str:
+        filtered_data = __apply_order_by(
+            filtered_data, order_by_clause_str, schema
+        )
 
-    print(f"Selected {len(result_set)} rows from '{table_name}'")
-    return result_set
+    if limit_value is not None:
+        filtered_data = __apply_limit(filtered_data, limit_value)
+
+    return __select_columns(filtered_data, select_items, schema)
 
 
 def __apply_where_filters(table_data, where_clause_str, schema):
@@ -269,90 +433,96 @@ def __parse_select_items(columns_str, schema):
         raise InvalidRequest("No columns specified in SELECT clause")
 
     items = []
-    agg_pattern = re.compile(
-        r"(count|sum|min|max|avg)\s*\(\s*(distinct\s+)?([^\s\)]+)\s*\)\s*(?:as\s+(\w+)|(\w+))?",
-        re.IGNORECASE,
-    )
-
-    function_pattern = re.compile(
-        r"(writetime|ttl)\s*\(\s*(\w+)\s*\)\s*(?:as\s+(\w+)|(\w+))?",
-        re.IGNORECASE,
-    )
-
-    column_pattern = re.compile(r"(\w+)(?:\s+AS\s+(\w+))?", re.IGNORECASE)
 
     for raw in raw_items:
-        agg_match = agg_pattern.fullmatch(raw)
-        if agg_match:
-            func = agg_match.group(1).lower()
-            distinct_flag = bool(agg_match.group(2))
-            argument = agg_match.group(3)
-            alias = agg_match.group(4) or agg_match.group(5) or func
-
-            argument = argument.strip()
-            if distinct_flag:
-                if func != "count":
-                    raise InvalidRequest(
-                        "DISTINCT is only supported with COUNT"
-                    )
-                if argument in {"*", "1"}:
-                    raise InvalidRequest(
-                        "COUNT DISTINCT requires a column argument"
-                    )
-
-            if func != "count" and argument in {"*", "1"}:
-                raise InvalidRequest(
-                    f"Aggregate function '{func}' requires a column argument"
-                )
-
-            if argument not in {"*", "1"}:
-                argument = __resolve_column_name(argument, schema)
-
-            items.append(
-                {
-                    "type": "aggregate",
-                    "func": func,
-                    "arg": argument,
-                    "alias": alias.lower(),
-                    "distinct": distinct_flag,
-                }
-            )
+        item = __parse_aggregate_select(raw, schema)
+        if item is not None:
+            items.append(item)
             continue
 
-        func_match = function_pattern.fullmatch(raw)
-        if func_match:
-            func = func_match.group(1).lower()
-            column_name = __resolve_column_name(func_match.group(2), schema)
-            alias = func_match.group(3) or func_match.group(4)
-            if not alias:
-                alias = f"{func}({column_name})"
-
-            items.append(
-                {
-                    "type": "function",
-                    "func": func,
-                    "arg": column_name,
-                    "alias": alias,
-                }
-            )
+        item = __parse_function_select(raw, schema)
+        if item is not None:
+            items.append(item)
             continue
 
-        column_match = column_pattern.fullmatch(raw)
-        if column_match:
-            column_name = __resolve_column_name(column_match.group(1), schema)
-            alias = column_match.group(2)
-            items.append(
-                {
-                    "type": "column",
-                    "name": column_name,
-                    "alias": (alias or column_name),
-                }
-            )
+        item = __parse_column_select(raw, schema)
+        if item is not None:
+            items.append(item)
             continue
 
         raise InvalidRequest(f"Unsupported SELECT expression: {raw}")
 
     return items
+
+
+def __parse_aggregate_select(raw, schema):
+    """Parse an aggregate select expression if present."""
+    match = _AGG_SELECT_PATTERN.fullmatch(raw)
+    if not match:
+        return None
+
+    func = match.group(1).lower()
+    distinct_flag = bool(match.group(2))
+    argument = match.group(3).strip()
+    alias = match.group(4) or match.group(5) or func
+
+    if distinct_flag:
+        if func != "count":
+            raise InvalidRequest("DISTINCT is only supported with COUNT")
+        if argument in {"*", "1"}:
+            raise InvalidRequest("COUNT DISTINCT requires a column argument")
+
+    if func != "count" and argument in {"*", "1"}:
+        raise InvalidRequest(
+            f"Aggregate function '{func}' requires a column argument"
+        )
+
+    if argument not in {"*", "1"}:
+        argument = __resolve_column_name(argument, schema)
+
+    return {
+        "type": "aggregate",
+        "func": func,
+        "arg": argument,
+        "alias": alias.lower(),
+        "distinct": distinct_flag,
+    }
+
+
+def __parse_function_select(raw, schema):
+    """Parse a per-row function select expression if present."""
+    match = _FUNCTION_SELECT_PATTERN.fullmatch(raw)
+    if not match:
+        return None
+
+    func = match.group(1).lower()
+    column_name = __resolve_column_name(match.group(2), schema)
+    alias = match.group(3) or match.group(4)
+    if not alias:
+        alias = f"{func}({column_name})"
+
+    return {
+        "type": "function",
+        "func": func,
+        "arg": column_name,
+        "alias": alias,
+    }
+
+
+def __parse_column_select(raw, schema):
+    """Parse a column select expression if present."""
+    match = _COLUMN_SELECT_PATTERN.fullmatch(raw)
+    if not match:
+        return None
+
+    column_name = __resolve_column_name(match.group(1), schema)
+    alias = match.group(2)
+
+    return {
+        "type": "column",
+        "name": column_name,
+        "alias": (alias or column_name),
+    }
 
 
 def __parse_group_by(group_by_clause_str, schema):
@@ -479,11 +649,11 @@ def __compute_aggregate(filtered_data, item):
 
     if func == "sum":
         return sum(values) if values else 0
-    if func == "min":
+    elif func == "min":
         return min(values) if values else None
-    if func == "max":
+    elif func == "max":
         return max(values) if values else None
-    if func == "avg":
+    elif func == "avg":
         return (sum(values) / len(values)) if values else None
 
     raise InvalidRequest(f"Unsupported aggregate function '{func}'")
@@ -497,59 +667,68 @@ def __parse_having_conditions(having_clause_str, schema, group_by_columns):
     if not group_by_columns:
         raise InvalidRequest("HAVING clause requires GROUP BY")
 
-    condition_strs = re.split(
-        r"\s+AND\s+", having_clause_str.strip(), flags=re.IGNORECASE
-    )
     conditions = []
-    pattern = re.compile(
-        r"(count|sum|min|max|avg)\s*\(\s*(distinct\s+)?([^\s\)]+)\s*\)\s*(=|!=|>=|<=|>|<)\s*(.+)",
-        re.IGNORECASE,
-    )
-
-    for raw in condition_strs:
-        raw = raw.strip()
-        if not raw:
+    for raw_condition in __split_having_conditions(having_clause_str):
+        if not raw_condition:
             continue
-        match = pattern.fullmatch(raw)
-        if not match:
-            raise InvalidRequest(f"Unsupported HAVING condition: {raw}")
-
-        func = match.group(1).lower()
-        distinct_flag = bool(match.group(2))
-        argument = match.group(3).strip()
-        operator = match.group(4)
-        value_literal = match.group(5).strip()
-
-        if distinct_flag:
-            if func != "count":
-                raise InvalidRequest(
-                    "DISTINCT is only supported with COUNT in HAVING"
-                )
-            if argument in {"*", "1"}:
-                raise InvalidRequest(
-                    "COUNT DISTINCT in HAVING requires a column argument"
-                )
-
-        if func != "count" and argument in {"*", "1"}:
-            raise InvalidRequest(
-                f"Aggregate function '{func}' in HAVING requires a column argument"
-            )
-
-        if argument not in {"*", "1"}:
-            argument = __resolve_column_name(argument, schema)
-
-        value = __parse_literal(value_literal)
         conditions.append(
-            {
-                "func": func,
-                "arg": argument,
-                "operator": operator,
-                "distinct": distinct_flag,
-                "value": value,
-            }
+            __parse_single_having_condition(raw_condition, schema)
         )
 
     return conditions
+
+
+def __split_having_conditions(having_clause_str):
+    """Split a HAVING clause into individual condition strings."""
+    stripped = having_clause_str.strip()
+    return [part.strip() for part in _HAVING_SPLIT_PATTERN.split(stripped)]
+
+
+def __parse_single_having_condition(raw_condition, schema):
+    """Parse a single HAVING condition into a structured representation."""
+    match = _HAVING_PATTERN.fullmatch(raw_condition)
+    if not match:
+        raise InvalidRequest(f"Unsupported HAVING condition: {raw_condition}")
+
+    func = match.group(1).lower()
+    distinct_flag = bool(match.group(2))
+    argument = match.group(3).strip()
+    operator = match.group(4)
+    value_literal = match.group(5).strip()
+
+    argument = __resolve_having_argument(func, argument, distinct_flag, schema)
+    value = __parse_literal(value_literal)
+
+    return {
+        "func": func,
+        "arg": argument,
+        "operator": operator,
+        "distinct": distinct_flag,
+        "value": value,
+    }
+
+
+def __resolve_having_argument(func, argument, distinct_flag, schema):
+    """Validate and normalize the aggregate argument used in HAVING."""
+    if distinct_flag:
+        if func != "count":
+            raise InvalidRequest(
+                "DISTINCT is only supported with COUNT in HAVING"
+            )
+        if argument in {"*", "1"}:
+            raise InvalidRequest(
+                "COUNT DISTINCT in HAVING requires a column argument"
+            )
+
+    if func != "count" and argument in {"*", "1"}:
+        raise InvalidRequest(
+            f"Aggregate function '{func}' in HAVING requires a column argument"
+        )
+
+    if argument not in {"*", "1"}:
+        return __resolve_column_name(argument, schema)
+
+    return argument
 
 
 def __check_having_conditions(group_rows, conditions):
@@ -670,7 +849,7 @@ def __deduplicate_rows(rows):
 def __compute_row_function(row_dict, item):
     """Compute per-row functions like WRITETIME and TTL."""
     func = item["func"]
-    column = item["arg"]
+    _column = item["arg"]
 
     if func == "writetime":
         # Writetime metadata is not tracked; return None as Cassandra would for unset
