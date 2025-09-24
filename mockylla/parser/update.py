@@ -39,6 +39,116 @@ def replace_placeholders(segment, params, start_idx):
     return new_segment, idx
 
 
+def _resolve_write_directives(using_clause):
+    ttl_value, ttl_provided, timestamp_value, timestamp_provided = (
+        parse_using_options(using_clause)
+    )
+    if ttl_value is not None and ttl_value < 0:
+        raise InvalidRequest("TTL value must be >= 0")
+    return ttl_value, ttl_provided, timestamp_value, timestamp_provided
+
+
+def _normalise_update_clauses(set_clause_str, where_clause_str, parameters):
+    if not parameters or "%s" not in (set_clause_str + where_clause_str):
+        return set_clause_str, where_clause_str
+
+    set_clause_str, next_idx = replace_placeholders(
+        set_clause_str, parameters, 0
+    )
+    where_clause_str, _ = replace_placeholders(
+        where_clause_str, parameters, next_idx
+    )
+    return set_clause_str, where_clause_str
+
+
+def _find_matching_rows(table_data, parsed_conditions):
+    return [
+        row
+        for row in table_data
+        if __handle_update_check_row(row, parsed_conditions)
+    ]
+
+
+def _determine_write_timestamp(timestamp_value, timestamp_provided):
+    return (
+        timestamp_value
+        if timestamp_provided
+        else current_timestamp_microseconds()
+    )
+
+
+def _resolve_now_seconds(ttl_provided, ttl_value):
+    if ttl_provided and ttl_value and ttl_value > 0:
+        return time.time()
+    return None
+
+
+def _apply_conditional_update(
+    condition_type,
+    lwt_conditions,
+    matching_rows,
+    table,
+    table_name,
+    parsed_conditions,
+    set_operations,
+    counter_operations,
+    write_timestamp,
+    ttl_value,
+    ttl_provided,
+    now_seconds,
+):
+    if condition_type == "if_not_exists":
+        if matching_rows:
+            return [build_lwt_result(False, matching_rows[0])], False
+        __handle_upsert(
+            table,
+            table_name,
+            parsed_conditions,
+            set_operations,
+            counter_operations,
+            write_timestamp,
+            ttl_value,
+            ttl_provided,
+            now_seconds,
+        )
+        return [build_lwt_result(True)], True
+
+    if condition_type == "if_exists":
+        if not matching_rows:
+            return [build_lwt_result(False)], False
+        rows_updated = __update_existing_rows(
+            table,
+            parsed_conditions,
+            set_operations,
+            counter_operations,
+            write_timestamp,
+            ttl_value,
+            ttl_provided,
+            now_seconds,
+        )
+        return [build_lwt_result(True)], rows_updated > 0
+
+    if condition_type == "conditions":
+        if not matching_rows:
+            return [build_lwt_result(False)], False
+        for row in matching_rows:
+            if not check_row_conditions(row, lwt_conditions):
+                return [build_lwt_result(False, row)], False
+        rows_updated = __update_existing_rows(
+            table,
+            parsed_conditions,
+            set_operations,
+            counter_operations,
+            write_timestamp,
+            ttl_value,
+            ttl_provided,
+            now_seconds,
+        )
+        return [build_lwt_result(True)], rows_updated > 0
+
+    return None, False
+
+
 def handle_update(update_match, session, state, parameters=None):
     """Handle UPDATE query by parsing and executing the update operation."""
     (
@@ -49,19 +159,16 @@ def handle_update(update_match, session, state, parameters=None):
         if_clause,
     ) = update_match.groups()
 
-    ttl_value, ttl_provided, timestamp_value, timestamp_provided = (
-        parse_using_options(using_clause)
-    )
-    if ttl_value is not None and ttl_value < 0:
-        raise InvalidRequest("TTL value must be >= 0")
+    (
+        ttl_value,
+        ttl_provided,
+        timestamp_value,
+        timestamp_provided,
+    ) = _resolve_write_directives(using_clause)
 
-    if parameters and "%s" in (set_clause_str + where_clause_str):
-        set_clause_str, next_idx = replace_placeholders(
-            set_clause_str, parameters, 0
-        )
-        where_clause_str, _ = replace_placeholders(
-            where_clause_str, parameters, next_idx
-        )
+    set_clause_str, where_clause_str = _normalise_update_clauses(
+        set_clause_str, where_clause_str, parameters
+    )
 
     keyspace_name, table_name, table = get_table(
         table_name_full, session, state
@@ -78,74 +185,31 @@ def handle_update(update_match, session, state, parameters=None):
     condition_type = clause_info["type"]
     lwt_conditions = clause_info.get("conditions", [])
 
-    matching_rows = [
-        row
-        for row in table["data"]
-        if __handle_update_check_row(row, parsed_conditions)
-    ]
-
-    write_timestamp = (
-        timestamp_value
-        if timestamp_provided
-        else current_timestamp_microseconds()
+    matching_rows = _find_matching_rows(table["data"], parsed_conditions)
+    write_timestamp = _determine_write_timestamp(
+        timestamp_value, timestamp_provided
     )
-    now_seconds = None
-    if ttl_provided and ttl_value and ttl_value > 0:
-        now_seconds = time.time()
+    now_seconds = _resolve_now_seconds(ttl_provided, ttl_value)
 
-    if condition_type == "if_not_exists":
-        if matching_rows:
-            return [build_lwt_result(False, matching_rows[0])]
-        __handle_upsert(
-            table,
-            table_name,
-            parsed_conditions,
-            set_operations,
-            counter_operations,
-            write_timestamp,
-            ttl_value,
-            ttl_provided,
-            now_seconds,
-        )
-        rebuild_materialized_views(state, keyspace_name, table_name)
-        return [build_lwt_result(True)]
+    result, mutates_table = _apply_conditional_update(
+        condition_type,
+        lwt_conditions,
+        matching_rows,
+        table,
+        table_name,
+        parsed_conditions,
+        set_operations,
+        counter_operations,
+        write_timestamp,
+        ttl_value,
+        ttl_provided,
+        now_seconds,
+    )
 
-    if condition_type == "if_exists":
-        if not matching_rows:
-            return [build_lwt_result(False)]
-        rows_updated = __update_existing_rows(
-            table,
-            parsed_conditions,
-            set_operations,
-            counter_operations,
-            write_timestamp,
-            ttl_value,
-            ttl_provided,
-            now_seconds,
-        )
-        if rows_updated > 0:
+    if result is not None:
+        if mutates_table:
             rebuild_materialized_views(state, keyspace_name, table_name)
-        return [build_lwt_result(True)]
-
-    if condition_type == "conditions":
-        if not matching_rows:
-            return [build_lwt_result(False)]
-        for row in matching_rows:
-            if not check_row_conditions(row, lwt_conditions):
-                return [build_lwt_result(False, row)]
-        rows_updated = __update_existing_rows(
-            table,
-            parsed_conditions,
-            set_operations,
-            counter_operations,
-            write_timestamp,
-            ttl_value,
-            ttl_provided,
-            now_seconds,
-        )
-        if rows_updated > 0:
-            rebuild_materialized_views(state, keyspace_name, table_name)
-        return [build_lwt_result(True)]
+        return result
 
     rows_updated = __update_existing_rows(
         table,

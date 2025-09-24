@@ -2,6 +2,7 @@ import ast
 import re
 
 from cassandra import InvalidRequest
+from typing import Tuple
 
 
 def _split_top_level(value):
@@ -69,24 +70,41 @@ def handle_create_keyspace(create_keyspace_match, state):
     return []
 
 
-def handle_create_table(create_table_match, session, state):
-    table_name_full, columns_str, options_str = create_table_match.groups()
-
+def _determine_target_table(table_name_full, session):
     if "." in table_name_full:
-        keyspace_name, table_name = table_name_full.split(".", 1)
-    elif session.keyspace:
-        keyspace_name, table_name = session.keyspace, table_name_full
-    else:
-        raise InvalidRequest("No keyspace specified for CREATE TABLE")
+        return table_name_full.split(".", 1)
+    if session.keyspace:
+        return session.keyspace, table_name_full
+    raise InvalidRequest("No keyspace specified for CREATE TABLE")
 
+
+def _ensure_table_can_be_created(keyspace_name, table_name, state):
     if keyspace_name not in state.keyspaces:
         raise InvalidRequest(f"Keyspace '{keyspace_name}' does not exist")
-
     if table_name in state.keyspaces[keyspace_name]["tables"]:
         raise InvalidRequest(
             f"Table '{table_name}' already exists in keyspace '{keyspace_name}'"
         )
 
+
+def _determine_depth_and_position(
+    columns_str: str, paren_start: int
+) -> Tuple[int, int]:
+    depth = 0
+    idx = paren_start
+    while idx < len(columns_str):
+        if columns_str[idx] == "(":
+            depth += 1
+        elif columns_str[idx] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        idx += 1
+
+    return depth, idx
+
+
+def _extract_primary_key_components(columns_str):
     partition_keys = []
     clustering_keys = []
     pk_start = None
@@ -100,54 +118,67 @@ def handle_create_table(create_table_match, session, state):
             paren_start = idx
             break
 
-    if pk_start is not None and paren_start is not None:
-        depth = 0
-        idx = paren_start
-        while idx < len(columns_str):
-            if columns_str[idx] == "(":
-                depth += 1
-            elif columns_str[idx] == ")":
-                depth -= 1
-                if depth == 0:
-                    break
-            idx += 1
+    if pk_start is None or paren_start is None:
+        return columns_str, partition_keys, clustering_keys
 
-        if depth != 0:
-            raise InvalidRequest(
-                "Unbalanced parentheses in PRIMARY KEY definition"
-            )
+    depth, idx = _determine_depth_and_position(columns_str, paren_start)
 
-        pk_end = idx + 1
-        pk_def = columns_str[paren_start + 1 : pk_end - 1]
-        partition_keys, clustering_keys = _parse_primary_key(pk_def)
+    if depth != 0:
+        raise InvalidRequest("Unbalanced parentheses in PRIMARY KEY definition")
 
-        columns_str = columns_str[:pk_start] + columns_str[pk_end:]
+    pk_end = idx + 1
+    pk_definition = columns_str[paren_start + 1 : pk_end - 1]
+    partition_keys, clustering_keys = _parse_primary_key(pk_definition)
+    remaining_columns = columns_str[:pk_start] + columns_str[pk_end:]
+    return remaining_columns, partition_keys, clustering_keys
 
+
+def _parse_columns(columns_str):
     column_defs = _parse_column_defs(columns_str)
-
     columns = []
     inline_primary_keys = []
-    for c in column_defs:
-        parts = c.split(None, 1)
-        if len(parts) == 2:
-            name, type_ = parts
 
-            if "PRIMARY KEY" in type_.upper():
-                inline_primary_keys.append(name)
-            type_ = re.sub(
-                r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE
-            ).strip()
-            columns.append((name, type_))
+    for column_def in column_defs:
+        parts = column_def.split(None, 1)
+        if len(parts) != 2:
+            continue
+        name, type_ = parts
+        if "PRIMARY KEY" in type_.upper():
+            inline_primary_keys.append(name)
+        cleaned_type = re.sub(
+            r"\s+PRIMARY\s+KEY", "", type_, flags=re.IGNORECASE
+        ).strip()
+        columns.append((name, cleaned_type))
 
     schema = {name: type_ for name, type_ in columns if name}
+    return schema, inline_primary_keys
 
-    clustering_orders = {}
-    options = {}
-    if options_str:
-        from mockylla.parser.utils import parse_with_options
 
-        clustering_orders, options_str = _extract_clustering_orders(options_str)
-        options = parse_with_options(options_str)
+def _parse_table_options_block(options_str):
+    if not options_str:
+        return {}, {}
+
+    from mockylla.parser.utils import parse_with_options
+
+    clustering_orders, cleaned_options = _extract_clustering_orders(options_str)
+    options = parse_with_options(cleaned_options)
+    return clustering_orders, options
+
+
+def handle_create_table(create_table_match, session, state):
+    table_name_full, columns_str, options_str = create_table_match.groups()
+
+    keyspace_name, table_name = _determine_target_table(
+        table_name_full, session
+    )
+    _ensure_table_can_be_created(keyspace_name, table_name, state)
+
+    columns_str, partition_keys, clustering_keys = (
+        _extract_primary_key_components(columns_str)
+    )
+    schema, inline_primary_keys = _parse_columns(columns_str)
+
+    clustering_orders, options = _parse_table_options_block(options_str)
 
     if not partition_keys and inline_primary_keys:
         partition_keys = inline_primary_keys

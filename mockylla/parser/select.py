@@ -1,4 +1,5 @@
 import re
+import time
 
 from cassandra import InvalidRequest
 
@@ -7,6 +8,8 @@ from .utils import (
     get_table,
     parse_where_clause,
     purge_expired_rows,
+    row_ttl,
+    row_write_timestamp,
 )
 from mockylla.row import Row
 
@@ -79,6 +82,8 @@ def handle_select_from(select_match, session, state, parameters=None):
 
     filtered_data = __apply_where_filters(table_data, where_clause_str, schema)
 
+    now_seconds = time.time()
+
     result_set = __execute_select_query(
         filtered_data,
         select_items,
@@ -90,6 +95,7 @@ def handle_select_from(select_match, session, state, parameters=None):
         limit_value,
         is_distinct,
         limit_str is not None,
+        now_seconds,
     )
 
     print(f"Selected {len(result_set)} rows from '{table_name}'")
@@ -286,6 +292,7 @@ def __execute_select_query(
     limit_value,
     is_distinct,
     limit_present,
+    now_seconds,
 ):
     """Run the appropriate SELECT flow based on the parsed query."""
     has_aggregates = select_flags["has_aggregates"]
@@ -316,7 +323,9 @@ def __execute_select_query(
             raise InvalidRequest(
                 "ORDER BY is not supported with SELECT DISTINCT"
             )
-        result_rows = __select_columns(filtered_data, select_items, schema)
+        result_rows = __select_columns(
+            filtered_data, select_items, schema, now_seconds
+        )
         result_rows = __deduplicate_rows(result_rows)
         if limit_value is not None:
             result_rows = result_rows[:limit_value]
@@ -330,7 +339,7 @@ def __execute_select_query(
     if limit_value is not None:
         filtered_data = __apply_limit(filtered_data, limit_value)
 
-    return __select_columns(filtered_data, select_items, schema)
+    return __select_columns(filtered_data, select_items, schema, now_seconds)
 
 
 def __apply_where_filters(table_data, where_clause_str, schema):
@@ -804,7 +813,7 @@ def __compare_values(left, operator, right):
     raise InvalidRequest(f"Unsupported comparison operator '{operator}'")
 
 
-def __select_columns(filtered_data, select_items, schema):
+def __select_columns(filtered_data, select_items, schema, now_seconds):
     """Project non-aggregate columns from filtered data."""
     ordered_keys = list(schema.keys())
 
@@ -831,8 +840,10 @@ def __select_columns(filtered_data, select_items, schema):
             if item_type == "column":
                 values.append(row_dict.get(payload))
             elif item_type == "function":
-                values.append(__compute_row_function(row_dict, payload))
-        result_set.append(Row(names=names, values=values))
+                values.append(
+                    __compute_row_function(row_dict, payload, now_seconds)
+                )
+        result_set.append(Row(names, values))
 
     return result_set
 
@@ -852,16 +863,15 @@ def __deduplicate_rows(rows):
     return unique_rows
 
 
-def __compute_row_function(row_dict, item):
+def __compute_row_function(row_dict, item, now_seconds):
     """Compute per-row functions like WRITETIME and TTL."""
     func = item["func"]
-    _column = item["arg"]
-
     if func == "writetime":
-        # Writetime metadata is not tracked; return None as Cassandra would for unset
-        return None
+        timestamp = row_write_timestamp(row_dict)
+        if timestamp in {None, float("-inf")}:
+            return None
+        return int(timestamp)
     if func == "ttl":
-        # TTL metadata is not tracked; return None for unset columns
-        return None
+        return row_ttl(row_dict, now=now_seconds)
 
     raise InvalidRequest(f"Unsupported function '{func}' in SELECT clause")

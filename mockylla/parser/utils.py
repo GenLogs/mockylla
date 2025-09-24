@@ -428,6 +428,28 @@ def row_write_timestamp(row):
     return meta.get("timestamp", float("-inf"))
 
 
+def row_ttl(row, *, now=None):
+    """Return remaining TTL in seconds for a row or ``None`` when unset."""
+
+    if not isinstance(row, dict):
+        return None
+
+    meta = row.get("__meta")
+    if not isinstance(meta, dict):
+        return None
+
+    ttl_value = meta.get("ttl")
+    expires_at = meta.get("expires_at")
+    if ttl_value is None or expires_at is None:
+        return None
+
+    now = time.time() if now is None else now
+    remaining = int(expires_at - now)
+    if remaining <= 0:
+        return 0
+    return remaining
+
+
 def build_lwt_result(applied, row=None):
     """Construct a Row representing an LWT result."""
 

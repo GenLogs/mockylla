@@ -120,3 +120,24 @@ def test_timestamp_precedence_on_insert():
 
     row = session.execute("SELECT name FROM users WHERE id = 1").one()
     assert row.name == "Gamma"
+
+
+@mock_scylladb
+def test_select_ttl_and_writetime_functions():
+    cluster = Cluster()
+    session = cluster.connect()
+    _setup_basic_table(session)
+
+    timestamp = 987654321000000
+    session.execute(
+        "INSERT INTO users (id, name, email) VALUES (1, 'Alice', 'alice@example.com') USING TTL 120 AND TIMESTAMP %s"
+        % timestamp
+    )
+
+    row = session.execute(
+        "SELECT ttl(name) AS ttl_name, writetime(name) AS wt_name FROM users WHERE id = 1"
+    ).one()
+
+    assert row.ttl_name is not None
+    assert 0 <= row.ttl_name <= 120
+    assert row.wt_name == timestamp

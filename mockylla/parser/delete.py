@@ -9,6 +9,76 @@ from mockylla.parser.utils import (
 )
 
 
+def _normalise_where_clause(where_clause_str, parameters):
+    if not parameters:
+        return where_clause_str
+
+    query_parts = where_clause_str.split("%s")
+    if len(query_parts) - 1 != len(parameters):
+        raise ValueError(
+            "Number of parameters does not match number of placeholders in WHERE clause"
+        )
+
+    final_where = query_parts[0]
+    for idx, param in enumerate(parameters):
+        param_str = f"'{param}'" if isinstance(param, str) else str(param)
+        final_where += param_str + query_parts[idx + 1]
+    return final_where
+
+
+def _select_rows_matching_conditions(table_data, parsed_conditions):
+    rows_to_delete = []
+    rows_to_keep = []
+
+    for row in table_data:
+        if check_row_conditions(row, parsed_conditions):
+            rows_to_delete.append(row)
+        else:
+            rows_to_keep.append(row)
+
+    return rows_to_delete, rows_to_keep
+
+
+def _apply_lwt_delete(
+    condition_type,
+    rows_to_delete,
+    rows_to_keep,
+    lwt_conditions,
+    keyspace_name,
+    table_name,
+    state,
+):
+    deleted_count = len(rows_to_delete)
+
+    if condition_type == "if_not_exists":
+        if deleted_count:
+            return [build_lwt_result(False, rows_to_delete[0])], False
+        return [build_lwt_result(True)], False
+
+    if condition_type == "if_exists":
+        if not deleted_count:
+            return [build_lwt_result(False)], False
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"] = (
+            rows_to_keep
+        )
+        print(f"Deleted {deleted_count} rows from '{table_name}'")
+        return [build_lwt_result(True)], True
+
+    if condition_type == "conditions":
+        if not deleted_count:
+            return [build_lwt_result(False)], False
+        for row in rows_to_delete:
+            if not check_row_conditions(row, lwt_conditions):
+                return [build_lwt_result(False, row)], False
+        state.keyspaces[keyspace_name]["tables"][table_name]["data"] = (
+            rows_to_keep
+        )
+        print(f"Deleted {deleted_count} rows from '{table_name}'")
+        return [build_lwt_result(True)], True
+
+    return None, deleted_count > 0
+
+
 def handle_delete_from(delete_match, session, state, parameters=None):
     table_name_full, where_clause_str, if_clause = delete_match.groups()
 
@@ -19,18 +89,7 @@ def handle_delete_from(delete_match, session, state, parameters=None):
     table_data = table_info["data"]
     schema = table_info["schema"]
 
-    if parameters:
-        query_parts = where_clause_str.split("%s")
-        if len(query_parts) - 1 != len(parameters):
-            raise ValueError(
-                "Number of parameters does not match number of placeholders in WHERE clause"
-            )
-
-        final_where = query_parts[0]
-        for i, param in enumerate(parameters):
-            param_str = f"'{param}'" if isinstance(param, str) else str(param)
-            final_where += param_str + query_parts[i + 1]
-        where_clause_str = final_where
+    where_clause_str = _normalise_where_clause(where_clause_str, parameters)
 
     if not where_clause_str:
         return []
@@ -43,49 +102,30 @@ def handle_delete_from(delete_match, session, state, parameters=None):
     condition_type = clause_info["type"]
     lwt_conditions = clause_info.get("conditions", [])
 
-    rows_to_delete = []
-    rows_to_keep = []
-    for row in table_data:
-        if check_row_conditions(row, parsed_conditions):
-            rows_to_delete.append(row)
-        else:
-            rows_to_keep.append(row)
+    rows_to_delete, rows_to_keep = _select_rows_matching_conditions(
+        table_data, parsed_conditions
+    )
 
-    deleted_count = len(rows_to_delete)
+    result, mutates_table = _apply_lwt_delete(
+        condition_type,
+        rows_to_delete,
+        rows_to_keep,
+        lwt_conditions,
+        keyspace_name,
+        table_name,
+        state,
+    )
 
-    if condition_type == "if_not_exists":
-        if deleted_count:
-            return [build_lwt_result(False, rows_to_delete[0])]
-        return [build_lwt_result(True)]
+    if result is not None:
+        if mutates_table:
+            rebuild_materialized_views(state, keyspace_name, table_name)
+        return result
 
-    if condition_type == "if_exists":
-        if not deleted_count:
-            return [build_lwt_result(False)]
+    if rows_to_delete:
         state.keyspaces[keyspace_name]["tables"][table_name]["data"] = (
             rows_to_keep
         )
-        print(f"Deleted {deleted_count} rows from '{table_name}'")
-        rebuild_materialized_views(state, keyspace_name, table_name)
-        return [build_lwt_result(True)]
-
-    if condition_type == "conditions":
-        if not deleted_count:
-            return [build_lwt_result(False)]
-        for row in rows_to_delete:
-            if not check_row_conditions(row, lwt_conditions):
-                return [build_lwt_result(False, row)]
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"] = (
-            rows_to_keep
-        )
-        print(f"Deleted {deleted_count} rows from '{table_name}'")
-        rebuild_materialized_views(state, keyspace_name, table_name)
-        return [build_lwt_result(True)]
-
-    if deleted_count > 0:
-        state.keyspaces[keyspace_name]["tables"][table_name]["data"] = (
-            rows_to_keep
-        )
-        print(f"Deleted {deleted_count} rows from '{table_name}'")
+        print(f"Deleted {len(rows_to_delete)} rows from '{table_name}'")
         rebuild_materialized_views(state, keyspace_name, table_name)
 
     return []

@@ -583,7 +583,7 @@ def test_select_writetime_ttl_functions():
     row = result.one()
 
     assert row is not None
-    assert row.wt is None
+    assert isinstance(row.wt, int)
     assert row.ttl is None
 
 
