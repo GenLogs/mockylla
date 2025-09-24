@@ -149,8 +149,10 @@ def _handle_select(query, session, state, parameters):
         (
             r"^\s*SELECT\s+(.*?)\s+FROM\s+([\w\.]+)"
             r"(?:\s+WHERE\s+(.*?))?"
+            r"(?:\s+GROUP\s+BY\s+(.*?))?"
+            r"(?:\s+HAVING\s+(.*?))?"
             r"(?:\s+ORDER BY\s+(.*?))?"
-            r"(?:\s+LIMIT\s+(\d+))?"
+            r"(?:\s+LIMIT\s+([^\s;]+))?"
             r"(?:\s+ALLOW\s+FILTERING)?"
             r"\s*;?\s*$"
         ),
