@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "mockylla"
 version = "0.5.0"
-description = "A mock for the ScyllaDB Python driver for testing purposes."
+description = "A lightweight, in-memory mock for the ScyllaDB **Python** driver."
 readme = "README.md"
 requires-python = ">=3.8,<3.12"
 classifiers = [
