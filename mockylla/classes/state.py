@@ -1,5 +1,25 @@
 from cassandra import InvalidRequest
 
+from mockylla.parser.utils import purge_expired_rows
+
+
+def _resolve_primary_key_components(table_info):
+    """Return partition, clustering, and combined primary key components."""
+
+    primary_key = table_info.get("primary_key") or {}
+    if isinstance(primary_key, dict):
+        partition_keys = primary_key.get("partition", [])
+        clustering_keys = primary_key.get("clustering", [])
+        combined = primary_key.get("all")
+        if combined is None:
+            combined = partition_keys + clustering_keys
+    else:
+        partition_keys = list(primary_key[:1])
+        clustering_keys = list(primary_key[1:])
+        combined = list(primary_key)
+
+    return partition_keys, clustering_keys, combined
+
 
 class ScyllaState:
     """Manages the in-memory state of the mock ScyllaDB."""
@@ -70,6 +90,7 @@ class ScyllaState:
                             "column_name": "text",
                             "kind": "text",
                             "type": "text",
+                            "clustering_order": "text",
                         },
                         "primary_key": [
                             "keyspace_name",
@@ -202,12 +223,19 @@ class ScyllaState:
 
     def _build_column_rows(self, keyspace_name, table_name, table_info):
         schema = table_info.get("schema", {})
-        primary_key = table_info.get("primary_key", [])
-        partition_keys = primary_key[:1]
-        clustering_keys = primary_key[1:]
+        partition_keys, clustering_keys, _ = _resolve_primary_key_components(
+            table_info
+        )
+        clustering_orders = table_info.get("clustering_orders", {})
 
         column_rows = []
         for column_name, data_type in schema.items():
+            if column_name in clustering_keys:
+                clustering_order = clustering_orders.get(
+                    column_name, "ASC"
+                ).lower()
+            else:
+                clustering_order = "none"
             column_rows.append(
                 {
                     "keyspace_name": keyspace_name,
@@ -217,6 +245,7 @@ class ScyllaState:
                         column_name, partition_keys, clustering_keys
                     ),
                     "type": data_type,
+                    "clustering_order": clustering_order,
                 }
             )
 
@@ -292,7 +321,9 @@ def get_table_rows(keyspace_name, table_name):
         raise InvalidRequest(
             f"Table '{table_name}' does not exist in keyspace '{keyspace_name}'."
         )
-    return tables[table_name]["data"]
+    table_info = tables[table_name]
+    purge_expired_rows(table_info)
+    return table_info["data"]
 
 
 def get_types(keyspace_name):

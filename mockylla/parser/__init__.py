@@ -94,7 +94,7 @@ def _handle_create_keyspace(query, _session, state, _parameters):
 
 def _handle_create_table(query, session, state, _parameters):
     match = re.match(
-        r"^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s*\((.*)\)\s*(?:WITH\s+(.*))?\s*;?\s*$",
+        r"^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([\w\.]+)\s*\((.*?)\)\s*(?:WITH\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -134,7 +134,7 @@ def _handle_create_materialized_view(query, session, state, _parameters):
 
 def _handle_insert(query, session, state, parameters):
     match = re.match(
-        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(?:USING\s+(.*?))?\s*(IF\s+NOT\s+EXISTS)?\s*;?\s*$",
+        r"^\s*INSERT\s+INTO\s+([\w\.]+)\s*\(([\w\s,]+)\)\s+VALUES\s*\((.*)\)\s*(?:USING\s+(.*?))?(?:\s+IF\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -149,8 +149,11 @@ def _handle_select(query, session, state, parameters):
         (
             r"^\s*SELECT\s+(.*?)\s+FROM\s+([\w\.]+)"
             r"(?:\s+WHERE\s+(.*?))?"
+            r"(?:\s+GROUP\s+BY\s+(.*?))?"
+            r"(?:\s+HAVING\s+(.*?))?"
             r"(?:\s+ORDER BY\s+(.*?))?"
-            r"(?:\s+LIMIT\s+(\d+))?"
+            r"(?:\s+LIMIT\s+([^\s;]+))?"
+            r"(?:\s+ALLOW\s+FILTERING)?"
             r"\s*;?\s*$"
         ),
         query,
@@ -164,7 +167,7 @@ def _handle_select(query, session, state, parameters):
 
 def _handle_update(query, session, state, parameters):
     match = re.match(
-        r"^\s*UPDATE\s+([\w\.]+)(?:\s+USING\s+(.*?))?\s+SET\s+(.*)\s+WHERE\s+(.*?)\s*(IF\s+EXISTS)?\s*;?\s*$",
+        r"^\s*UPDATE\s+([\w\.]+)(?:\s+USING\s+(.*?))?\s+SET\s+(.*)\s+WHERE\s+(.*?)(?:\s+IF\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE | re.DOTALL,
     )
@@ -176,7 +179,7 @@ def _handle_update(query, session, state, parameters):
 
 def _handle_delete(query, session, state, parameters):
     match = re.match(
-        r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)\s*(IF EXISTS)?\s*;?\s*$",
+        r"^\s*DELETE\s+FROM\s+([\w\.]+)\s+WHERE\s+(.*?)(?:\s+IF\s+(.*))?\s*;?\s*$",
         query,
         re.IGNORECASE,
     )

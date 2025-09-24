@@ -105,3 +105,33 @@ def test_delete_if_exists():
     result_success = session.execute(delete_success_query)
     assert result_success.one()["[applied]"] is True
     assert len(get_table_rows(keyspace_name, table_name)) == 0
+
+
+@mock_scylladb
+def test_delete_if_condition():
+    cluster = Cluster(["127.0.0.1"])
+    session = cluster.connect()
+    keyspace_name = "my_keyspace"
+    table_name = "my_table"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
+    )
+    session.set_keyspace(keyspace_name)
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
+    )
+    session.execute(f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')")
+
+    result_fail = session.execute(
+        f"DELETE FROM {table_name} WHERE id = 1 IF name = 'Bob'"
+    )
+    fail_row = result_fail.one()
+    assert fail_row["[applied]"] is False
+    assert fail_row["name"] == "Alice"
+
+    result_success = session.execute(
+        f"DELETE FROM {table_name} WHERE id = 1 IF name = 'Alice'"
+    )
+    assert result_success.one()["[applied]"] is True
+    assert len(get_table_rows(keyspace_name, table_name)) == 0

@@ -42,6 +42,17 @@ class MockKeyspaceMetadata:
         return self.views.get(name)
 
 
+def _resolve_primary_key_info(primary_key):
+    if isinstance(primary_key, dict):
+        partition = primary_key.get("partition", [])
+        clustering = primary_key.get("clustering", [])
+        combined = primary_key.get("all") or (partition + clustering)
+        return partition, clustering, combined
+    partition = list(primary_key[:1])
+    clustering = list(primary_key[1:])
+    return partition, clustering, list(primary_key)
+
+
 class MockTableMetadata:
     """Represents table metadata."""
 
@@ -53,16 +64,24 @@ class MockTableMetadata:
             column_name: MockColumnMetadata(column_name, column_type)
             for column_name, column_type in schema.items()
         }
-        primary_key = table_info.get("primary_key", [])
+        partition_names, clustering_names, primary_names = (
+            _resolve_primary_key_info(table_info.get("primary_key", []))
+        )
         self.partition_key = [
-            self.columns[col] for col in primary_key[:1] if col in self.columns
+            self.columns[col] for col in partition_names if col in self.columns
         ]
         self.clustering_key = [
-            self.columns[col] for col in primary_key[1:] if col in self.columns
+            self.columns[col] for col in clustering_names if col in self.columns
         ]
         self.primary_key = [
-            self.columns[col] for col in primary_key if col in self.columns
+            self.columns[col] for col in primary_names if col in self.columns
         ]
+        self.clustering_orders = table_info.get("clustering_orders", {})
+        for column_name, column in self.columns.items():
+            if column_name in self.clustering_orders:
+                column.clustering_order = self.clustering_orders[column_name]
+            else:
+                column.clustering_order = None
         self.indexes = [
             {
                 "name": idx.get("name"),
@@ -96,6 +115,7 @@ class MockColumnMetadata:
         self.name = name
         self.cql_type = cql_type
         self.typestring = cql_type
+        self.clustering_order = None
 
 
 __all__ = [

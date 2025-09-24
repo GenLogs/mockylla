@@ -83,3 +83,40 @@ def test_update_if_exists():
     assert result_fail.one()["[applied]"] is False
     assert len(get_table_rows(keyspace_name, table_name)) == 1
     assert rows[0]["value"] == 20
+
+
+@mock_scylladb
+def test_update_if_condition():
+    cluster = Cluster(["127.0.0.1"])
+    session = cluster.connect()
+    keyspace_name = "my_keyspace"
+    table_name = "my_table"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
+    )
+    session.set_keyspace(keyspace_name)
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text, value int)"
+    )
+    session.execute(
+        f"INSERT INTO {table_name} (id, name, value) VALUES (1, 'Alice', 10)"
+    )
+
+    result_success = session.execute(
+        f"UPDATE {table_name} SET value = 30 WHERE id = 1 IF value = 10"
+    )
+    assert result_success.one()["[applied]"] is True
+    assert get_table_rows(keyspace_name, table_name)[0]["value"] == 30
+
+    result_fail = session.execute(
+        f"UPDATE {table_name} SET value = 40 WHERE id = 1 IF value = 10"
+    )
+    fail_row = result_fail.one()
+    assert fail_row["[applied]"] is False
+    assert fail_row["value"] == 30
+
+    result_missing = session.execute(
+        f"UPDATE {table_name} SET value = 50 WHERE id = 2 IF value = 10"
+    )
+    assert result_missing.one()["[applied]"] is False
