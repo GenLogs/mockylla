@@ -97,3 +97,61 @@ def test_select_with_compound_where_clause():
 
     assert len(rows) == 1
     assert rows[0] == {"id": 3, "name": "Alice", "city": "Los Angeles"}
+
+
+@mock_scylladb
+def test_select_count_star():
+    cluster = Cluster(["127.0.0.1"])
+    session = cluster.connect()
+    keyspace_name = "my_keyspace"
+    table_name = "my_table"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
+    )
+    session.set_keyspace(keyspace_name)
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, name text)"
+    )
+
+    session.execute(
+        f"INSERT INTO {table_name} (id, name) VALUES (1, 'Alice')"
+    )
+    session.execute(
+        f"INSERT INTO {table_name} (id, name) VALUES (2, 'Bob')"
+    )
+
+    result = session.execute(f"SELECT COUNT(*) FROM {table_name}")
+    row = result.one()
+
+    assert row is not None
+    assert row.count == 2
+    assert row[0] == 2
+    assert row["count"] == 2
+
+
+@mock_scylladb
+def test_select_count_star_alias():
+    cluster = Cluster(["127.0.0.1"])
+    session = cluster.connect()
+    keyspace_name = "alias_keyspace"
+    table_name = "alias_table"
+
+    session.execute(
+        f"CREATE KEYSPACE {keyspace_name} WITH REPLICATION = {{'class': 'SimpleStrategy', 'replication_factor': 1}}"
+    )
+    session.set_keyspace(keyspace_name)
+    session.execute(
+        f"CREATE TABLE {table_name} (id int PRIMARY KEY, value text)"
+    )
+
+    session.execute(
+        f"INSERT INTO {table_name} (id, value) VALUES (1, 'one')"
+    )
+
+    result = session.execute(f"SELECT COUNT(*) AS total FROM {table_name}")
+    row = result.one()
+
+    assert row is not None
+    assert row.total == 1
+    assert row["total"] == 1

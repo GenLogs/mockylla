@@ -1,3 +1,5 @@
+import re
+
 from cassandra import InvalidRequest
 
 from .utils import get_table, parse_where_clause, check_row_conditions
@@ -91,6 +93,17 @@ def __select_columns(filtered_data, columns_str, schema):
     """Select specified columns from filtered data."""
     select_cols_str = columns_str.strip()
     ordered_keys = list(schema.keys())
+
+    count_match = re.fullmatch(
+        r"count\s*\(\s*(?:\*|1)\s*\)\s*(?:as\s+(\w+)|(\w+))?",
+        select_cols_str,
+        flags=re.IGNORECASE,
+    )
+    if count_match:
+        alias = count_match.group(1) or count_match.group(2) or "count"
+        alias = alias.lower()
+        row = Row(names=[alias], values=[len(filtered_data)])
+        return [row]
 
     if select_cols_str == "*":
         select_cols = ordered_keys
